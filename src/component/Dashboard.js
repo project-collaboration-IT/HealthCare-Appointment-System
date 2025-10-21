@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import AppointmentScheduler from './AppointmentScheduler';
 
 const Dashboard = ({ language, userData }) => {
   const [showAccountInfo, setShowAccountInfo] = useState(false);
@@ -6,6 +7,8 @@ const Dashboard = ({ language, userData }) => {
   const [showContact, setShowContact] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [showScheduler, setShowScheduler] = useState(false);
+  const [appointments, setAppointments] = useState([]);
 
   const content = {
     en: {
@@ -57,9 +60,9 @@ const Dashboard = ({ language, userData }) => {
       addressLabel: 'Address',
       phoneLabel: 'Telepono',
       emailLabel: 'Email',
-      newsTitle: 'Mga Balita',
+      newsTitle: 'Balita at Mga Patalastas',
       scheduleBtn: 'Mag-iskedyul ng Appointment',
-      appointmentSummary: 'Kasalukuyang Appointment',
+      appointmentSummary: 'Buod ng Kasalukuyang Appointment',
       noAppointment: 'Walang naka-iskedyul na appointment',
       scheduleNow: 'Mag-iskedyul Ngayon',
       viewDetails: 'Tingnan ang Detalye'
@@ -97,6 +100,17 @@ const Dashboard = ({ language, userData }) => {
 
   const prevSlide = () => {
     setCurrentSlide((prev) => (prev - 1 + announcements.length) % announcements.length);
+  };
+
+  const handleAppointmentSubmit = (appointmentData) => {
+    const newAppointment = {
+      id: Date.now(),
+      ...appointmentData,
+      status: 'confirmed'
+    };
+    setAppointments(prev => [...prev, newAppointment]);
+    setShowScheduler(false);
+    console.log('Appointment submitted:', newAppointment);
   };
 
   return (
@@ -318,7 +332,8 @@ const Dashboard = ({ language, userData }) => {
       {/* MAIN DASHBOARD CONTENT */}
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="grid gap-6 lg:grid-cols-2">
-     
+          
+          {/* LEFT SIDE - News and Announcements Carousel */}
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-center justify-between mb-6">
               <button 
@@ -371,10 +386,14 @@ const Dashboard = ({ language, userData }) => {
             </div>
           </div>
 
-          {/* Appointments */}
+          {/* RIGHT SIDE - Appointments */}
           <div className="space-y-6">
-         
-            <button className="w-full bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow text-left group">
+            
+            {/* Schedule New Appointment Button */}
+            <button 
+              onClick={() => setShowScheduler(true)}
+              className="w-full bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow text-left group"
+            >
               <div className="flex items-center justify-between">
                 <h3 className="text-xl font-medium text-gray-800">{text.scheduleBtn}</h3>
                 <svg className="w-8 h-8 text-green-600 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -383,22 +402,63 @@ const Dashboard = ({ language, userData }) => {
               </div>
             </button>
 
+            {/* Appointment Summary */}
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h3 className="text-xl font-medium text-gray-800 mb-4">{text.appointmentSummary}</h3>
 
-              <div className="text-center py-12">
-                <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                <p className="text-gray-500 mb-4">{text.noAppointment}</p>
-                <button className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">
-                  {text.scheduleNow}
-                </button>
-              </div>
+              {appointments.length === 0 ? (
+                <div className="text-center py-12">
+                  <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <p className="text-gray-500 mb-4">{text.noAppointment}</p>
+                  <button 
+                    onClick={() => setShowScheduler(true)}
+                    className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+                  >
+                    {text.scheduleNow}
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {appointments.map((appointment) => (
+                    <div key={appointment.id} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <h4 className="font-medium text-gray-800">
+                            {language === 'en' ? 'Health Check-up' : 'Health Check-up'}
+                          </h4>
+                          <p className="text-sm text-gray-500 mt-1">
+                            {language === 'en' ? 'Date & Time' : 'Petsa at Oras'}
+                          </p>
+                          <p className="text-sm text-gray-800">
+                            {appointment.selectedDate} - {appointment.selectedTime}
+                          </p>
+                        </div>
+                        <span className="px-3 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                          {language === 'en' ? 'Confirmed' : 'Nakumpirma'}
+                        </span>
+                      </div>
+                      <button className="w-full py-2 border border-green-500 text-green-500 rounded-lg hover:bg-green-50 transition-colors text-sm">
+                        {text.viewDetails}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Appointment Scheduler Modal */}
+      {showScheduler && (
+        <AppointmentScheduler
+          language={language}
+          onClose={() => setShowScheduler(false)}
+          onSubmit={handleAppointmentSubmit}
+        />
+      )}
     </div>
   );
 };
