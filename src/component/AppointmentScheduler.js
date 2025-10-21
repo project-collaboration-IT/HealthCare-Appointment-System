@@ -1,9 +1,10 @@
 import { useState } from 'react';
 
-const AppointmentScheduler = ({ language, onClose, onSubmit }) => {
+const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment }) => {
   const [currentStep, setCurrentStep] = useState(1);
+  const [currentMonth, setCurrentMonth] = useState(0); // 0 = January, 1 = February, etc.
   const [formData, setFormData] = useState({
-    symptoms: {
+    symptoms: editingAppointment?.symptoms || {
       general: [],
       skin: [],
       breast: [],
@@ -21,15 +22,16 @@ const AppointmentScheduler = ({ language, onClose, onSubmit }) => {
       psychiatric: [],
       women: []
     },
-    recentMeals: '',
-    medications: '',
-    selectedDate: null,
-    selectedTime: null
+    recentMeals: editingAppointment?.recentMeals || '',
+    medications: editingAppointment?.medications || '',
+    selectedDate: editingAppointment?.selectedDate || null,
+    selectedTime: editingAppointment?.selectedTime || null
   });
 
   const content = {
     en: {
       title: 'Schedule an Appointment',
+      editTitle: 'Edit Appointment',
       step: 'Step',
       of: 'of',
       next: 'Next',
@@ -54,6 +56,7 @@ const AppointmentScheduler = ({ language, onClose, onSubmit }) => {
       allergic: 'Allergic/Immune',
       psychiatric: 'Psychiatric',
       women: 'Women Only',
+      validationError: 'Please select at least one option in each category:',
       // Step 2
       mealsTitle: 'Recent Meals',
       mealsDesc: 'What have you eaten in the past few days?',
@@ -66,6 +69,7 @@ const AppointmentScheduler = ({ language, onClose, onSubmit }) => {
       dateTitle: 'Select Date',
       dateDesc: 'Choose an available date for your appointment',
       slotsAvailable: 'slots available',
+      fullyBooked: 'Fully Booked',
       // Step 5
       timeTitle: 'Select Time',
       timeDesc: 'Choose your preferred time slot',
@@ -76,6 +80,7 @@ const AppointmentScheduler = ({ language, onClose, onSubmit }) => {
     },
     tl: {
       title: 'Mag-iskedyul ng Appointment',
+      editTitle: 'I-edit ang Appointment',
       step: 'Hakbang',
       of: 'ng',
       next: 'Susunod',
@@ -99,6 +104,7 @@ const AppointmentScheduler = ({ language, onClose, onSubmit }) => {
       allergic: 'Allergy at Immune',
       psychiatric: 'Mental Health',
       women: 'Para sa Kababaihan Lamang',
+      validationError: 'Pakipili ng kahit isang opsyon sa bawat kategorya:',
       mealsTitle: 'Mga Kinain Kamakailan',
       mealsDesc: 'Ano ang iyong kinain sa nakaraang ilang araw?',
       mealsPlaceholder: 'Pakibigay ang detalye ng iyong mga kinain sa nakaraang 2-3 araw...',
@@ -108,6 +114,7 @@ const AppointmentScheduler = ({ language, onClose, onSubmit }) => {
       dateTitle: 'Pumili ng Petsa',
       dateDesc: 'Pumili ng available na petsa para sa iyong appointment',
       slotsAvailable: 'slots available',
+      fullyBooked: 'Punong-puno na',
       timeTitle: 'Pumili ng Oras',
       timeDesc: 'Pumili ng oras na gusto mo',
       morning: 'Umaga',
@@ -233,32 +240,99 @@ const AppointmentScheduler = ({ language, onClose, onSubmit }) => {
   };
 
   const generateCalendar = () => {
-    const dates = [];
-    const today = new Date();
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
+    const year = 2025;
+    const months = [];
     
-    for (let i = 0; i < 30; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + i);
+    // Generate calendar for each month
+    for (let month = 0; month < 12; month++) {
+      const monthData = {
+        month: month,
+        monthName: new Date(year, month).toLocaleDateString('en-US', { month: 'long' }),
+        year: year,
+        weeks: []
+      };
       
-      if (date.getDay() !== 0 && date.getDay() !== 6) {
-        dates.push({
-          date: date,
-          slots: Math.floor(Math.random() * 50) + 50
-        });
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      const startDate = new Date(firstDay);
+      
+      // Adjust to start from Sunday
+      startDate.setDate(startDate.getDate() - startDate.getDay());
+      
+      // Generate 6 weeks (42 days) to ensure we cover the entire month
+      for (let week = 0; week < 6; week++) {
+        const weekData = [];
+        
+        for (let day = 0; day < 7; day++) {
+          const currentDate = new Date(startDate);
+          currentDate.setDate(startDate.getDate() + (week * 7) + day);
+          
+          const isCurrentMonth = currentDate.getMonth() === month;
+          const isWeekend = currentDate.getDay() === 0 || currentDate.getDay() === 6;
+          const isPast = currentDate < new Date();
+          
+          let slots = 0;
+          let isAvailable = false;
+          
+          if (isCurrentMonth && !isWeekend && !isPast) {
+            isAvailable = true;
+            // Generate realistic slot availability
+            const random = Math.random();
+            
+            if (random < 0.15) {
+              // 15% chance of 0 slots (fully booked)
+              slots = 0;
+            } else if (random < 0.25) {
+              // 10% chance of low slots (1-10)
+              slots = Math.floor(Math.random() * 10) + 1;
+            } else {
+              // 75% chance of good availability (20-50)
+              slots = Math.floor(Math.random() * 31) + 20;
+            }
+          }
+          
+          weekData.push({
+            date: currentDate,
+            day: currentDate.getDate(),
+            isCurrentMonth,
+            isWeekend,
+            isPast,
+            isAvailable,
+            slots
+          });
+        }
+        
+        monthData.weeks.push(weekData);
       }
+      
+      months.push(monthData);
     }
     
-    return dates;
+    return months;
   };
 
-  const availableDates = generateCalendar();
+  const calendarData = generateCalendar();
 
   const timeSlots = [
     '7:00 AM', '7:30 AM', '8:00 AM', '8:30 AM',
     '9:00 AM', '9:30 AM', '10:00 AM', '10:30 AM', '11:00 AM'
   ];
+
+  const validateSymptoms = () => {
+    const symptomCategories = Object.keys(formData.symptoms);
+    const unselectedCategories = [];
+    
+    symptomCategories.forEach(category => {
+      if (formData.symptoms[category].length === 0) {
+        unselectedCategories.push(category);
+      }
+    });
+    
+    return {
+      isValid: unselectedCategories.length === 0,
+      unselectedCategories
+    };
+  };
 
   const handleSubmit = () => {
     const appointmentData = {
@@ -268,35 +342,59 @@ const AppointmentScheduler = ({ language, onClose, onSubmit }) => {
     onSubmit(appointmentData);
   };
 
-  const renderStep1 = () => (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-xl font-medium text-gray-800 mb-2">{text.symptomsTitle}</h3>
-        <p className="text-sm text-gray-600 mb-6">{text.symptomsDesc}</p>
-      </div>
-
-      <div className="max-h-96 overflow-y-auto space-y-6 pr-2">
-        {Object.entries(symptomCategories).map(([category, symptoms]) => (
-          <div key={category} className="border-b border-gray-200 pb-4">
-            <h4 className="font-medium text-gray-700 mb-3">{text[category]}</h4>
-            <div className="space-y-2">
-              {symptoms.map((symptom) => (
-                <label key={symptom} className="flex items-center space-x-3 cursor-pointer hover:bg-gray-50 p-2 rounded">
-                  <input
-                    type="checkbox"
-                    checked={formData.symptoms[category].includes(symptom)}
-                    onChange={() => toggleSymptom(category, symptom)}
-                    className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                  />
-                  <span className="text-sm text-gray-700">{symptom}</span>
-                </label>
-              ))}
+  const renderStep1 = () => {
+    const validation = validateSymptoms();
+    
+    return (
+      <div className="space-y-6">
+        <div>
+          <h3 className="text-xl font-medium text-gray-800 mb-2">{text.symptomsTitle}</h3>
+          <p className="text-sm text-gray-600 mb-6">{text.symptomsDesc}</p>
+          
+          {!validation.isValid && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+              <p className="text-sm text-red-600 font-medium mb-1">
+                {text.validationError}
+              </p>
+              <ul className="text-xs text-red-600 list-disc list-inside">
+                {validation.unselectedCategories.map(category => (
+                  <li key={category}>{text[category]}</li>
+                ))}
+              </ul>
             </div>
-          </div>
-        ))}
+          )}
+        </div>
+
+        <div className="max-h-96 overflow-y-auto space-y-6 pr-2">
+          {Object.entries(symptomCategories).map(([category, symptoms]) => {
+            const isUnselected = validation.unselectedCategories.includes(category);
+            
+            return (
+              <div key={category} className={`border-b border-gray-200 pb-4 ${isUnselected ? 'bg-red-50 rounded-lg p-3' : ''}`}>
+                <h4 className={`font-medium mb-3 ${isUnselected ? 'text-red-700' : 'text-gray-700'}`}>
+                  {text[category]}
+                  {isUnselected && <span className="text-red-500 ml-2">*</span>}
+                </h4>
+                <div className="space-y-2">
+                  {symptoms.map((symptom) => (
+                    <label key={symptom} className="flex items-center space-x-3 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                      <input
+                        type="checkbox"
+                        checked={formData.symptoms[category].includes(symptom)}
+                        onChange={() => toggleSymptom(category, symptom)}
+                        className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                      />
+                      <span className="text-sm text-gray-700">{symptom}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderStep2 = () => (
     <div className="space-y-6">
@@ -332,41 +430,105 @@ const AppointmentScheduler = ({ language, onClose, onSubmit }) => {
     </div>
   );
 
-  const renderStep4 = () => (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-xl font-medium text-gray-800 mb-2">{text.dateTitle}</h3>
-        <p className="text-sm text-gray-600 mb-6">{text.dateDesc}</p>
-      </div>
+  const renderStep4 = () => {
+    const currentMonthData = calendarData[currentMonth];
+    const dayHeaders = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+    
+    return (
+      <div className="space-y-6">
+        <div>
+          <h3 className="text-xl font-medium text-gray-800 mb-2">{text.dateTitle}</h3>
+          <p className="text-sm text-gray-600 mb-6">{text.dateDesc}</p>
+        </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-h-96 overflow-y-auto">
-        {availableDates.map((dateObj, index) => {
-          const isSelected = formData.selectedDate === dateObj.date.toDateString();
-          return (
-            <button
-              key={index}
-              onClick={() => setFormData({ ...formData, selectedDate: dateObj.date.toDateString() })}
-              className={`p-4 border-2 rounded-lg transition-all ${
-                isSelected
-                  ? 'border-green-500 bg-green-50'
-                  : 'border-gray-200 hover:border-green-300'
-              }`}
-            >
-              <div className="font-medium text-gray-800">
-                {dateObj.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+        {/* Month Navigation */}
+        <div className="flex justify-between items-center mb-4">
+          <button
+            onClick={() => setCurrentMonth(prev => Math.max(0, prev - 1))}
+            disabled={currentMonth === 0}
+            className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          
+          <h4 className="text-lg font-semibold text-gray-800">
+            {currentMonthData.monthName.toUpperCase()} {currentMonthData.year}
+          </h4>
+          
+          <button
+            onClick={() => setCurrentMonth(prev => Math.min(11, prev + 1))}
+            disabled={currentMonth === 11}
+            className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Calendar Grid */}
+        <div className="border border-gray-200 rounded-lg overflow-hidden">
+          {/* Day Headers */}
+          <div className="grid grid-cols-7 bg-gray-100">
+            {dayHeaders.map((day) => (
+              <div key={day} className="p-3 text-center text-sm font-medium text-gray-600 border-r border-gray-200 last:border-r-0">
+                {day}
               </div>
-              <div className="text-xs text-gray-500">
-                {dateObj.date.toLocaleDateString('en-US', { weekday: 'short' })}
-              </div>
-              <div className="text-xs text-green-600 mt-1">
-                {dateObj.slots} {text.slotsAvailable}
-              </div>
-            </button>
-          );
-        })}
+            ))}
+          </div>
+          
+          {/* Calendar Days */}
+          <div className="grid grid-cols-7">
+            {currentMonthData.weeks.map((week, weekIndex) =>
+              week.map((day, dayIndex) => {
+                const isSelected = formData.selectedDate === day.date.toDateString();
+                const isDisabled = !day.isAvailable || day.slots === 0;
+                
+                return (
+                  <button
+                    key={`${weekIndex}-${dayIndex}`}
+                    onClick={() => !isDisabled && setFormData({ ...formData, selectedDate: day.date.toDateString() })}
+                    disabled={isDisabled}
+                    className={`p-3 border-r border-b border-gray-200 last:border-r-0 min-h-[60px] flex flex-col items-center justify-center transition-all ${
+                      !day.isCurrentMonth
+                        ? 'bg-gray-50 text-gray-300'
+                        : isDisabled
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : isSelected
+                        ? 'bg-green-100 text-green-800 border-green-300'
+                        : 'hover:bg-gray-50 text-gray-800'
+                    }`}
+                  >
+                    <div className={`text-sm font-medium ${
+                      !day.isCurrentMonth ? 'text-gray-300' : 
+                      isDisabled ? 'text-gray-400' : 
+                      isSelected ? 'text-green-800' : 'text-gray-800'
+                    }`}>
+                      {day.day}
+                    </div>
+                    
+                    {day.isCurrentMonth && day.isAvailable && (
+                      <div className={`text-xs mt-1 ${
+                        day.slots === 0
+                          ? 'text-red-500 font-medium'
+                          : day.slots < 10
+                          ? 'text-orange-600'
+                          : 'text-green-600'
+                      }`}>
+                        {day.slots === 0 ? text.fullyBooked : `${day.slots}`}
+                      </div>
+                    )}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderStep5 = () => (
     <div className="space-y-6">
@@ -402,7 +564,9 @@ const AppointmentScheduler = ({ language, onClose, onSubmit }) => {
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b border-gray-200">
           <div>
-            <h2 className="text-2xl font-light text-gray-800">{text.title}</h2>
+            <h2 className="text-2xl font-light text-gray-800">
+              {editingAppointment ? text.editTitle : text.title}
+            </h2>
             <p className="text-sm text-gray-500 mt-1">
               {text.step} {currentStep} {text.of} 5
             </p>
@@ -449,8 +613,22 @@ const AppointmentScheduler = ({ language, onClose, onSubmit }) => {
 
           {currentStep < 5 ? (
             <button
-              onClick={() => setCurrentStep(prev => prev + 1)}
-              className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+              onClick={() => {
+                if (currentStep === 1) {
+                  const validation = validateSymptoms();
+                  if (validation.isValid) {
+                    setCurrentStep(prev => prev + 1);
+                  }
+                } else {
+                  setCurrentStep(prev => prev + 1);
+                }
+              }}
+              disabled={currentStep === 1 && !validateSymptoms().isValid}
+              className={`px-6 py-2 rounded-lg transition-colors ${
+                currentStep === 1 && !validateSymptoms().isValid
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-green-500 text-white hover:bg-green-600'
+              }`}
             >
               {text.next}
             </button>

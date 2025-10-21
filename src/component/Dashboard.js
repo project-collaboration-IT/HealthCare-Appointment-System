@@ -9,6 +9,11 @@ const Dashboard = ({ language, userData }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [showScheduler, setShowScheduler] = useState(false);
   const [appointments, setAppointments] = useState([]);
+  const [showAppointmentDetails, setShowAppointmentDetails] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState(null);
+  const [editingAppointment, setEditingAppointment] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [appointmentToDelete, setAppointmentToDelete] = useState(null);
 
   const content = {
     en: {
@@ -37,7 +42,22 @@ const Dashboard = ({ language, userData }) => {
       appointmentSummary: 'Summary of Existing Appointment',
       noAppointment: 'No appointment scheduled',
       scheduleNow: 'Schedule Now',
-      viewDetails: 'View Details'
+      viewDetails: 'View Details',
+      appointmentDetails: 'Appointment Details',
+      symptoms: 'Symptoms',
+      recentMeals: 'Recent Meals',
+      medications: 'Medications',
+      appointmentDate: 'Appointment Date',
+      appointmentTime: 'Appointment Time',
+      status: 'Status',
+      editAppointment: 'Edit Appointment',
+      deleteAppointment: 'Delete Appointment',
+      confirmDelete: 'Are you sure you want to delete this appointment?',
+      cancel: 'Cancel',
+      confirm: 'Confirm',
+      delete: 'Delete',
+      edit: 'Edit',
+      saveChanges: 'Save Changes'
     },
     tl: {
       welcome: 'Maligayang Pagdating',
@@ -65,7 +85,22 @@ const Dashboard = ({ language, userData }) => {
       appointmentSummary: 'Buod ng Kasalukuyang Appointment',
       noAppointment: 'Walang naka-iskedyul na appointment',
       scheduleNow: 'Mag-iskedyul Ngayon',
-      viewDetails: 'Tingnan ang Detalye'
+      viewDetails: 'Tingnan ang Detalye',
+      appointmentDetails: 'Detalye ng Appointment',
+      symptoms: 'Mga Sintomas',
+      recentMeals: 'Mga Kinain Kamakailan',
+      medications: 'Mga Gamot',
+      appointmentDate: 'Petsa ng Appointment',
+      appointmentTime: 'Oras ng Appointment',
+      status: 'Status',
+      editAppointment: 'I-edit ang Appointment',
+      deleteAppointment: 'Tanggalin ang Appointment',
+      confirmDelete: 'Sigurado ka bang gusto mong tanggalin ang appointment na ito?',
+      cancel: 'Kanselahin',
+      confirm: 'Kumpirmahin',
+      delete: 'Tanggalin',
+      edit: 'I-edit',
+      saveChanges: 'I-save ang mga Pagbabago'
     }
   };
 
@@ -103,14 +138,49 @@ const Dashboard = ({ language, userData }) => {
   };
 
   const handleAppointmentSubmit = (appointmentData) => {
-    const newAppointment = {
-      id: Date.now(),
-      ...appointmentData,
-      status: 'confirmed'
-    };
-    setAppointments(prev => [...prev, newAppointment]);
+    if (editingAppointment) {
+      // Update existing appointment
+      setAppointments(prev => prev.map(app => 
+        app.id === editingAppointment.id 
+          ? { ...app, ...appointmentData, status: 'confirmed' }
+          : app
+      ));
+      setEditingAppointment(null);
+    } else {
+      // Create new appointment
+      const newAppointment = {
+        id: Date.now(),
+        ...appointmentData,
+        status: 'confirmed'
+      };
+      setAppointments(prev => [...prev, newAppointment]);
+    }
     setShowScheduler(false);
-    console.log('Appointment submitted:', newAppointment);
+    console.log('Appointment submitted:', appointmentData);
+  };
+
+  const handleViewAppointmentDetails = (appointment) => {
+    setSelectedAppointment(appointment);
+    setShowAppointmentDetails(true);
+  };
+
+  const handleEditAppointment = (appointment) => {
+    setEditingAppointment(appointment);
+    setShowScheduler(true);
+    setShowAppointmentDetails(false);
+  };
+
+  const handleDeleteAppointment = (appointmentId) => {
+    setAppointmentToDelete(appointmentId);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteAppointment = () => {
+    setAppointments(prev => prev.filter(app => app.id !== appointmentToDelete));
+    setShowAppointmentDetails(false);
+    setSelectedAppointment(null);
+    setShowDeleteConfirm(false);
+    setAppointmentToDelete(null);
   };
 
   return (
@@ -329,6 +399,160 @@ const Dashboard = ({ language, userData }) => {
         </>
       )}
 
+      {/* APPOINTMENT DETAILS MODAL */}
+      {showAppointmentDetails && selectedAppointment && (
+        <>
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={() => setShowAppointmentDetails(false)} />
+          <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+              {/* Header */}
+              <div className="flex justify-between items-center p-6 border-b border-gray-200">
+                <h2 className="text-2xl font-light text-gray-800">{text.appointmentDetails}</h2>
+                <button onClick={() => setShowAppointmentDetails(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                {/* Basic Info */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h3 className="font-medium text-gray-700 mb-2">{text.appointmentDate}</h3>
+                    <p className="text-gray-800">{selectedAppointment.selectedDate}</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h3 className="font-medium text-gray-700 mb-2">{text.appointmentTime}</h3>
+                    <p className="text-gray-800">{selectedAppointment.selectedTime}</p>
+                  </div>
+                </div>
+
+                {/* Status */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h3 className="font-medium text-gray-700 mb-2">{text.status}</h3>
+                  <span className="px-3 py-1 bg-green-100 text-green-800 text-sm rounded-full">
+                    {language === 'en' ? 'Confirmed' : 'Nakumpirma'}
+                  </span>
+                </div>
+
+                {/* Symptoms */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h3 className="font-medium text-gray-700 mb-3">{text.symptoms}</h3>
+                  <div className="space-y-3">
+                    {Object.entries(selectedAppointment.symptoms).map(([category, symptoms]) => {
+                      if (symptoms.length === 0) return null;
+                      return (
+                        <div key={category} className="border-l-4 border-green-500 pl-3">
+                          <h4 className="font-medium text-gray-800 text-sm mb-1">
+                            {language === 'en' ? 
+                              category.charAt(0).toUpperCase() + category.slice(1).replace(/([A-Z])/g, ' $1') :
+                              text[category]
+                            }
+                          </h4>
+                          <ul className="text-sm text-gray-600 space-y-1">
+                            {symptoms.map((symptom, index) => (
+                              <li key={index} className="flex items-center">
+                                <span className="w-1.5 h-1.5 bg-green-500 rounded-full mr-2"></span>
+                                {symptom}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Recent Meals */}
+                {selectedAppointment.recentMeals && (
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h3 className="font-medium text-gray-700 mb-2">{text.recentMeals}</h3>
+                    <p className="text-gray-800 text-sm whitespace-pre-wrap">{selectedAppointment.recentMeals}</p>
+                  </div>
+                )}
+
+                {/* Medications */}
+                {selectedAppointment.medications && (
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h3 className="font-medium text-gray-700 mb-2">{text.medications}</h3>
+                    <p className="text-gray-800 text-sm whitespace-pre-wrap">{selectedAppointment.medications}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="flex justify-between items-center p-6 border-t border-gray-200">
+                <button
+                  onClick={() => handleDeleteAppointment(selectedAppointment.id)}
+                  className="px-6 py-2 border-2 border-red-500 text-red-500 rounded-lg hover:bg-red-50 transition-colors flex items-center space-x-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  <span>{text.deleteAppointment}</span>
+                </button>
+                
+                <div className="flex space-x-3">
+                  <button
+                    onClick={() => setShowAppointmentDetails(false)}
+                    className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    {text.cancel}
+                  </button>
+                  <button
+                    onClick={() => handleEditAppointment(selectedAppointment)}
+                    className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center space-x-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    <span>{text.editAppointment}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* DELETE CONFIRMATION MODAL */}
+      {showDeleteConfirm && (
+        <>
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={() => setShowDeleteConfirm(false)} />
+          <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                  <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                </div>
+                <h2 className="text-xl font-medium text-gray-800">{text.deleteAppointment}</h2>
+              </div>
+              
+              <p className="text-gray-600 mb-6">{text.confirmDelete}</p>
+              
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  {text.cancel}
+                </button>
+                <button
+                  onClick={confirmDeleteAppointment}
+                  className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                >
+                  {text.delete}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* MAIN DASHBOARD CONTENT */}
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="grid gap-6 lg:grid-cols-2">
@@ -439,7 +663,10 @@ const Dashboard = ({ language, userData }) => {
                           {language === 'en' ? 'Confirmed' : 'Nakumpirma'}
                         </span>
                       </div>
-                      <button className="w-full py-2 border border-green-500 text-green-500 rounded-lg hover:bg-green-50 transition-colors text-sm">
+                      <button 
+                        onClick={() => handleViewAppointmentDetails(appointment)}
+                        className="w-full py-2 border border-green-500 text-green-500 rounded-lg hover:bg-green-50 transition-colors text-sm"
+                      >
                         {text.viewDetails}
                       </button>
                     </div>
@@ -455,8 +682,12 @@ const Dashboard = ({ language, userData }) => {
       {showScheduler && (
         <AppointmentScheduler
           language={language}
-          onClose={() => setShowScheduler(false)}
+          onClose={() => {
+            setShowScheduler(false);
+            setEditingAppointment(null);
+          }}
           onSubmit={handleAppointmentSubmit}
+          editingAppointment={editingAppointment}
         />
       )}
     </div>
