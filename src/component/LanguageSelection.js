@@ -1,4 +1,5 @@
 //this is for the language selection page
+//eto parent class ni en and tl sa const sa mga files
 import { useState } from 'react';
 const LanguageSelection = ({ onSelectLanguage }) => {
   return (

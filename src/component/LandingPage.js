@@ -1,6 +1,7 @@
 //this is for the landing page
 import { useState } from 'react';
 
+//again, this is for the language
 const LandingPage = ({ language, onLoginClick, onSignupClick }) => {
   const content = {
     en: {
@@ -21,6 +22,7 @@ const LandingPage = ({ language, onLoginClick, onSignupClick }) => {
 
   const text = content[language];
 
+  //ito si log in and sign up button click
   return (
     <div className="min-h-screen bg-white flex items-center justify-center p-4">
       <div className="max-w-md w-full">

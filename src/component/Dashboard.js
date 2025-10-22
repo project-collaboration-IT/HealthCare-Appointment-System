@@ -1,6 +1,9 @@
+//ito pinakamahaba omfg sobra talaga
+
 import { useState } from 'react';
 import AppointmentScheduler from './AppointmentScheduler';
 
+//daming initialization 'no
 const Dashboard = ({ language, userData }) => {
   const [showAccountInfo, setShowAccountInfo] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -15,6 +18,7 @@ const Dashboard = ({ language, userData }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [appointmentToDelete, setAppointmentToDelete] = useState(null);
 
+  //haba rin nito, 'di ako makaisip ng other way para maimprove ito
   const content = {
     en: {
       welcome: 'Welcome',
@@ -129,6 +133,7 @@ const Dashboard = ({ language, userData }) => {
     }
   ];
 
+  //ito simple logic for the carousel, change this too
   const nextSlide = () => {
     setCurrentSlide((prev) => (prev + 1) % announcements.length);
   };
@@ -159,6 +164,8 @@ const Dashboard = ({ language, userData }) => {
     console.log('Appointment submitted:', appointmentData);
   };
 
+  //itong mga handlers, setters and such, para to sa
+  //mga screen na ise-set kung anong makikita niyo sa page
   const handleViewAppointmentDetails = (appointment) => {
     setSelectedAppointment(appointment);
     setShowAppointmentDetails(true);
@@ -185,7 +192,7 @@ const Dashboard = ({ language, userData }) => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* HEADER */}
+      {/* Ito ang header, dito nakalagay si settings and account info tapos si upper left na introduction*/}
       <div className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
           <div>
@@ -219,7 +226,7 @@ const Dashboard = ({ language, userData }) => {
         </div>
       </div>
 
-      {/* ACCOUNT INFO MODAL */}
+      {/* here nakalagay yung display account info na nilagay sa signup */}
       {showAccountInfo && (
         <>
           <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={() => setShowAccountInfo(false)} />
@@ -264,7 +271,7 @@ const Dashboard = ({ language, userData }) => {
         </>
       )}
 
-      {/* SETTINGS MODAL */}
+      {/* eto yung nasa loob ng settigns */}
       {showSettings && (
         <>
           <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={() => setShowSettings(false)} />
@@ -288,7 +295,8 @@ const Dashboard = ({ language, userData }) => {
                       </svg>
                       <span className="text-gray-700">{text.themeLabel}</span>
                     </div>
-                    
+
+                    {/* DI KO PA NALALAGYAN NG LOGIC TO KAYA NDI GAGANA*/}
                     <button
                       onClick={() => setDarkMode(!darkMode)}
                       className={`relative w-14 h-7 rounded-full transition-colors ${darkMode ? 'bg-green-500' : 'bg-gray-300'}`}
@@ -334,7 +342,7 @@ const Dashboard = ({ language, userData }) => {
         </>
       )}
 
-      {/* CONTACT MODAL */}
+      {/* ito yungh ieedit niyo sa "contact us" */}
       {showContact && (
         <>
           <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={() => setShowContact(false)} />
@@ -399,7 +407,7 @@ const Dashboard = ({ language, userData }) => {
         </>
       )}
 
-      {/* APPOINTMENT DETAILS MODAL */}
+      {/* ito 'yung lalabas kung anong info ng appointment */}
       {showAppointmentDetails && selectedAppointment && (
         <>
           <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={() => setShowAppointmentDetails(false)} />
@@ -553,7 +561,7 @@ const Dashboard = ({ language, userData }) => {
         </>
       )}
 
-      {/* MAIN DASHBOARD CONTENT */}
+      {/* DASHBOARD CONTENT */}
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="grid gap-6 lg:grid-cols-2">
           

@@ -1,9 +1,16 @@
+//This is the component for the scheduling, kinda messy but i'll try to walk yall
+
 import { useState } from 'react';
 
+//this is to initialize the states of the program - language, what page u are on, etc
+//same ito sa other files na may same block of code
 const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment }) => {
   const [currentStep, setCurrentStep] = useState(1);
+  //itong setCurrentStep or anything na kasunod ng "setCurrent" is used to replace whatever value was
+  //then itong "useState" is the memory of React so diyan naka store ang data.
   const [currentMonth, setCurrentMonth] = useState(0); // 0 = January, 1 = February, etc.
   const [formData, setFormData] = useState({
+    //under this is yung mga checkboxes ng symptoms
     symptoms: editingAppointment?.symptoms || {
       general: [],
       skin: [],
@@ -28,6 +35,7 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment 
     selectedTime: editingAppointment?.selectedTime || null
   });
 
+    //ito is same with other files, basta merong en or tl, matic for language selection
   const content = {
     en: {
       title: 'Schedule an Appointment',
@@ -239,6 +247,7 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment 
     });
   };
 
+  //code nito nakuha ko lang somewhere in the internet....
   const generateCalendar = () => {
     const year = 2025;
     const months = [];
@@ -276,6 +285,10 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment 
           
           if (isCurrentMonth && !isWeekend && !isPast) {
             isAvailable = true;
+
+            // ito please palitan niyo hwhahaha naka-random siya kapag
+            // pinindot niyo yung any date, in reality connected dapat sa db kung ilan nalang slots
+
             // Generate realistic slot availability
             const random = Math.random();
             
@@ -313,11 +326,13 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment 
 
   const calendarData = generateCalendar();
 
+  // ito naman ginawa kong between 7-11 am lang available time kasi sa centers ganon talaga
   const timeSlots = [
     '7:00 AM', '7:30 AM', '8:00 AM', '8:30 AM',
     '9:00 AM', '9:30 AM', '10:00 AM', '10:30 AM', '11:00 AM'
   ];
 
+  //ito validations ng checked boxes
   const validateSymptoms = () => {
     const symptomCategories = Object.keys(formData.symptoms);
     const unselectedCategories = [];
@@ -334,6 +349,7 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment 
     };
   };
 
+  //ito on submit, DITO ICOCONNECT SA DATABASE KUNG GUMAGANA LANG HUHUHUHUHU
   const handleSubmit = () => {
     const appointmentData = {
       ...formData,
@@ -342,6 +358,7 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment 
     onSubmit(appointmentData);
   };
 
+  //itong render kinda magulo si code pero for validation lang
   const renderStep1 = () => {
     const validation = validateSymptoms();
     
@@ -441,6 +458,8 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment 
           <p className="text-sm text-gray-600 mb-6">{text.dateDesc}</p>
         </div>
 
+
+        {/* ito nagsstart siya sa january instead of today's month, kindly change it*/}
         {/* Month Navigation */}
         <div className="flex justify-between items-center mb-4">
           <button
@@ -578,6 +597,7 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment 
           </button>
         </div>
 
+        {/*yep, progress bar siya, angas no*/}
         {/* Progress Bar */}
         <div className="px-6 pt-4">
           <div className="w-full bg-gray-200 rounded-full h-2">
@@ -631,8 +651,9 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment 
               }`}
             >
               {text.next}
-            </button>
+            </button> 
           ) : (
+
             <button
               onClick={handleSubmit}
               disabled={!formData.selectedDate || !formData.selectedTime}
