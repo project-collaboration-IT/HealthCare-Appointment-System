@@ -162,7 +162,7 @@ const Signup = ({ language, onSignup }) => {
                 <div className="space-y-1">
                   <p className="text-base md:text-lg text-gray-700"><strong>{text.loginName}:</strong> {formData.firstName}</p>
                   <p className="text-base md:text-lg text-gray-700"><strong>{text.password}:</strong> {formData.password}</p>
-                  <p className="text-base md:text-lg text-gray-700"><strong>{text.phone}:</strong> {formData.phone}</p>
+                  <p className="text-base md:text-lg text-gray-700"><strong>{text.number}:</strong> {formData.number}</p>
                 </div>
               </div>
 

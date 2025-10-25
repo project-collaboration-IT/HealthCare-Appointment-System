@@ -1,10 +1,12 @@
 //This is the component for the scheduling, kinda messy but i'll try to walk yall
+// NOW CONNECTED TO DATABASE - saves appointments to Firebase!
 
 import { useState } from 'react';
 
 //this is to initialize the states of the program - language, what page u are on, etc
 //same ito sa other files na may same block of code
-const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment }) => {
+// UPDATED: Added isLoading prop to show when saving to database
+const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment, isLoading }) => {
   const [currentStep, setCurrentStep] = useState(1);
   //itong setCurrentStep or anything na kasunod ng "setCurrent" is used to replace whatever value was
   //then itong "useState" is the memory of React so diyan naka store ang data.
@@ -45,6 +47,7 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment 
       next: 'Next',
       back: 'Back',
       submit: 'Submit Appointment',
+      submitting: 'Saving...',  // NEW: Loading text
       // Step 1
       symptomsTitle: 'What are you feeling?',
       symptomsDesc: 'Please check all symptoms that apply to you',
@@ -94,6 +97,7 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment 
       next: 'Susunod',
       back: 'Bumalik',
       submit: 'Isumite ang Appointment',
+      submitting: 'Nag-se-save...',  // NEW: Loading text
       symptomsTitle: 'Ano ang iyong nararamdaman?',
       symptomsDesc: 'Pakitandaan lahat ng sintomas na nararanasan mo',
       general: 'Pangkalahatan',
@@ -349,12 +353,15 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment 
     };
   };
 
-  //ito on submit, DITO ICOCONNECT SA DATABASE KUNG GUMAGANA LANG HUHUHUHUHU
+  // UPDATED: Handle submit - now just calls onSubmit which saves to database
+  // The actual saving happens in Dashboard.js
   const handleSubmit = () => {
     const appointmentData = {
       ...formData,
       submittedAt: new Date().toISOString()
     };
+    // Call the onSubmit function passed from Dashboard
+    // This will save to the database
     onSubmit(appointmentData);
   };
 
@@ -590,7 +597,11 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment 
               {text.step} {currentStep} {text.of} 5
             </p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
+          <button 
+            onClick={onClose} 
+            disabled={isLoading}  // Disable close button while saving
+            className="p-2 hover:bg-gray-100 rounded-lg disabled:opacity-50"
+          >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -617,13 +628,13 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment 
           {currentStep === 5 && renderStep5()}
         </div>
 
-        {/* Footer */}
+        {/* Footer - UPDATED with loading state */}
         <div className="flex justify-between items-center p-6 border-t border-gray-200">
           <button
             onClick={() => setCurrentStep(prev => prev - 1)}
-            disabled={currentStep === 1}
+            disabled={currentStep === 1 || isLoading}  // Disable while saving
             className={`px-6 py-2 rounded-lg transition-colors ${
-              currentStep === 1
+              currentStep === 1 || isLoading
                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                 : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
             }`}
@@ -643,9 +654,9 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment 
                   setCurrentStep(prev => prev + 1);
                 }
               }}
-              disabled={currentStep === 1 && !validateSymptoms().isValid}
+              disabled={(currentStep === 1 && !validateSymptoms().isValid) || isLoading}
               className={`px-6 py-2 rounded-lg transition-colors ${
-                currentStep === 1 && !validateSymptoms().isValid
+                (currentStep === 1 && !validateSymptoms().isValid) || isLoading
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   : 'bg-green-500 text-white hover:bg-green-600'
               }`}
@@ -653,17 +664,24 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment 
               {text.next}
             </button> 
           ) : (
-
+            // UPDATED: Submit button shows loading state
             <button
               onClick={handleSubmit}
-              disabled={!formData.selectedDate || !formData.selectedTime}
-              className={`px-6 py-2 rounded-lg transition-colors ${
-                !formData.selectedDate || !formData.selectedTime
+              disabled={!formData.selectedDate || !formData.selectedTime || isLoading}
+              className={`px-6 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
+                !formData.selectedDate || !formData.selectedTime || isLoading
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   : 'bg-green-500 text-white hover:bg-green-600'
               }`}
             >
-              {text.submit}
+              {/* Show spinner when loading */}
+              {isLoading && (
+                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              )}
+              <span>{isLoading ? text.submitting : text.submit}</span>
             </button>
           )}
         </div>
