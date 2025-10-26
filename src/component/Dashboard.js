@@ -12,7 +12,7 @@ import {
 } from '../utils/api';
 
 //daming initialization 'no
-const Dashboard = ({ language, userData }) => {
+  const Dashboard = ({ language, userData, onLogout }) => {
   const [showAccountInfo, setShowAccountInfo] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showContact, setShowContact] = useState(false);
@@ -28,6 +28,14 @@ const Dashboard = ({ language, userData }) => {
   // NEW: States for loading and error handling
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // NEW: Load appointments when component mounts
+  // useEffect runs automatically when the component loads or when userData changes
+  useEffect(() => {
+    if (userData && userData.id) {
+      loadAppointments();
+    }
+  }, [userData]); // This runs whenever userData changes
 
   // NEW: Function to load user's appointments from database
   // Using useCallback to memoize the function and prevent unnecessary re-renders
@@ -418,7 +426,7 @@ const Dashboard = ({ language, userData }) => {
                 </button>
                 
                 <button
-                  onClick={() => window.location.reload()}
+                  onClick={onLogout}
                   className="w-full border-2 border-red-500 text-red-600 rounded-lg p-4 hover:bg-red-50 transition-colors flex items-center justify-center space-x-3"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
