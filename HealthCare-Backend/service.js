@@ -46,20 +46,32 @@ app.post('/api/signup', async (req, res) => {
         message: 'All fields are required' 
       });
     }
+    // Deterministic user ID to avoid composite index queries
+    const normalizedFirstName = String(firstName).trim().toLowerCase();
+    const normalizedBarangay = String(barangay).trim().toLowerCase();
+    const userId = `${normalizedFirstName}__${normalizedBarangay}`;
 
-    // Check if user already exists
-    // use firstName + baranggay as a unique identifier
-    // since elderly users might have duplicate names
     const usersRef = db.collection('users');
-    const existingUser = await usersRef
-      .where('firstName', '==', firstName)
-      .where('barangay', '==', barangay)
-      .get();
+    const userRef = usersRef.doc(userId);
+    const existingDoc = await userRef.get();
+    if (existingDoc.exists) {
+      return res.status(409).json({
+        success: false,
+        message: 'An account with this name and address already exists'
+      });
+    }
 
-    if (!existingUser.empty) {
-      return res.status(409).json({ 
-        success: false, 
-        message: 'An account with this name and address already exists' 
+    // Also check legacy docs (auto-ID) to avoid duplicates from older versions
+    // We query by firstName and filter barangay in memory to avoid composite index requirements
+    const legacySnapshot = await usersRef.where('firstName', '==', firstName).get();
+    const legacyMatch = legacySnapshot.docs.find(d => {
+      const data = d.data() || {};
+      return String((data.barangay || '')).trim().toLowerCase() === normalizedBarangay;
+    });
+    if (legacyMatch) {
+      return res.status(409).json({
+        success: false,
+        message: 'An account with this name and address already exists (legacy)'
       });
     }
 
@@ -68,16 +80,16 @@ app.post('/api/signup', async (req, res) => {
     // This makes it impossible to reverse-engineer the password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user document in Firestore
-    const userDoc = await usersRef.add({
+    // Create user document in Firestore with deterministic ID
+    await userRef.set({
       firstName,
       lastName,
-      age: parseInt(age), // Convert string to number
+      age: parseInt(age),
       barangay,
       number,
-      password: hashedPassword, // Store hashed password, never plain text
-      createdAt: admin.firestore.FieldValue.serverTimestamp(), // Timestamp from server
-      appointments: [] // Initialize empty appointments array
+      password: hashedPassword,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      appointments: []
     });
 
     // Return success response with user ID
@@ -85,9 +97,9 @@ app.post('/api/signup', async (req, res) => {
     res.status(201).json({
       success: true,
       message: 'Account created successfully',
-      userId: userDoc.id,
+      userId: userId,
       user: {
-        id: userDoc.id,
+        id: userId,
         firstName,
         lastName,
         age,
@@ -122,26 +134,46 @@ app.post('/api/login', async (req, res) => {
         message: 'First name, address, and password are required' 
       });
     }
+    // Build deterministic ID (same as signup)
+    const normalizedFirstName = String(firstName).trim().toLowerCase();
+    const normalizedBarangay = String(barangay).trim().toLowerCase();
+    const userId = `${normalizedFirstName}__${normalizedBarangay}`;
 
-    // Find user by firstName and barangay
-    const usersRef = db.collection('users');
-    const userQuery = await usersRef
-      .where('firstName', '==', firstName)
-      .where('barangay', '==', barangay)
-      .get();
+    const userRef = db.collection('users').doc(userId);
+    let snapshot = await userRef.get();
+    let userData = null;
 
-    // Check if user exists
-    if (userQuery.empty) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'No account found with this name and address. Please create an account first.' 
+    if (!snapshot.exists) {
+      // Fallback for legacy users: query by firstName and filter by barangay
+      const usersRef = db.collection('users');
+      const byFirstName = await usersRef.where('firstName', '==', firstName).get();
+      const matchedDoc = byFirstName.docs.find(d => {
+        const data = d.data() || {};
+        return String((data.barangay || '')).trim().toLowerCase() === String(barangay).trim().toLowerCase();
       });
+
+      if (!matchedDoc) {
+        return res.status(404).json({
+          success: false,
+          message: 'No account found with this name and address. Please create an account first.'
+        });
+      }
+
+      userData = matchedDoc.data();
+
+      // Migrate legacy user to deterministic ID (without deleting legacy doc)
+      await userRef.set({
+        ...userData,
+        firstName: userData.firstName,
+        barangay: userData.barangay
+      }, { merge: true });
+      // Refresh snapshot to unify response payload
+      snapshot = await userRef.get();
     }
 
-    // Get the user document
-    // userQuery.docs[0] gets the first (and should be only) matching document
-    const userDoc = userQuery.docs[0];
-    const userData = userDoc.data();
+    if (!userData) {
+      userData = snapshot.data();
+    }
 
     // Verify password
     // bcrypt.compare() hashes the input password and compares it to the stored hash
@@ -159,7 +191,7 @@ app.post('/api/login', async (req, res) => {
       success: true,
       message: 'Login successful',
       user: {
-        id: userDoc.id,
+        id: userId,
         firstName: userData.firstName,
         lastName: userData.lastName,
         age: userData.age,
