@@ -37,6 +37,7 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment,
     },
     recentMeals: editingAppointment?.recentMeals || '',
     medications: editingAppointment?.medications || '',
+    othersSymptoms: editingAppointment?.othersSymptoms || '',
     selectedDate: editingAppointment?.selectedDate || null,
     selectedTime: editingAppointment?.selectedTime || null
   });
@@ -238,6 +239,33 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment,
     ]
   };
 
+  // Short description of the body/system for each category
+  const symptomCategoryDescriptions = {
+    general: language === 'en' ? 'Whole body / overall health' : 'Buong katawan / pangkalahatan',
+    skin: language === 'en' ? 'Skin and rashes' : 'Balat at pantal',
+    breast: language === 'en' ? 'Breast and chest area' : 'Dibdib at bahagi ng suso',
+    earsNoseThroat: language === 'en' ? 'Ears, nose, and throat' : 'Tainga, ilong, at lalamunan',
+    eyes: language === 'en' ? 'Eyes and vision' : 'Mata at paningin',
+    cardiovascular: language === 'en' ? 'Heart and blood vessels' : 'Puso at mga ugat',
+    respiratory: language === 'en' ? 'Lungs and breathing' : 'Baga at paghinga',
+    gastrointestinal: language === 'en' ? 'Stomach and digestion' : 'Tiyan at pagtunaw ng pagkain',
+    genitourinary: language === 'en' ? 'Urinary and reproductive' : 'Ihi at reproduktibo',
+    musculoskeletal: language === 'en' ? 'Muscles and bones' : 'Kalamnan at buto',
+    endocrine: language === 'en' ? 'Hormones and metabolism' : 'Hormones at metabolismo',
+    hematologic: language === 'en' ? 'Blood and lymph' : 'Dugo at lymph',
+    neurological: language === 'en' ? 'Brain and nerves' : 'Utak at nerbiyos',
+    allergic: language === 'en' ? 'Allergy and immune system' : 'Allergy at immune system',
+    psychiatric: language === 'en' ? 'Mood and sleep' : 'Pag-iisip at tulog',
+    women: language === 'en' ? 'Women’s health' : 'Para sa kababaihan'
+  };
+
+  // Track which sections are expanded
+  const [expandedSections, setExpandedSections] = useState(() => {
+    const initial = {};
+    Object.keys(symptomCategories).forEach(k => { initial[k] = false; });
+    return initial;
+  });
+
   const toggleSymptom = (category, symptom) => {
     setFormData(prev => {
       const categorySymptoms = prev.symptoms[category];
@@ -390,22 +418,8 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment,
     });
   });
 
-  //ito validations ng checked boxes
-  const validateSymptoms = () => {
-    const symptomCategories = Object.keys(formData.symptoms);
-    const unselectedCategories = [];
-    
-    symptomCategories.forEach(category => {
-      if (formData.symptoms[category].length === 0) {
-        unselectedCategories.push(category);
-      }
-    });
-    
-    return {
-      isValid: unselectedCategories.length === 0,
-      unselectedCategories
-    };
-  };
+  // No strict validation required in step 1 anymore
+  const validateSymptoms = () => ({ isValid: true, unselectedCategories: [] });
 
   // UPDATED: Handle submit - now just calls onSubmit which saves to database
   // The actual saving happens in Dashboard.js
@@ -421,8 +435,6 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment,
 
   //itong render kinda magulo si code pero for validation lang
   const renderStep1 = () => {
-    const validation = validateSymptoms();
-    
     return (
       <div className="space-y-4">
         <div>
@@ -431,62 +443,58 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment,
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4 max-h-[calc(90vh-250px)]">
-          {/* Checkboxes on the left */}
-          <div className="overflow-y-auto pr-2 space-y-4">
+          {/* Left: Collapsible sections */}
+          <div className="overflow-y-auto pr-2 space-y-3">
             {Object.entries(symptomCategories).map(([category, symptoms]) => {
-              const isUnselected = validation.unselectedCategories.includes(category);
-              
+              const expanded = expandedSections[category];
               return (
-                <div key={category} className={`border-b border-gray-200 pb-4 ${isUnselected ? 'bg-red-50 rounded-lg p-3' : ''}`}>
-                  <h4 className={`font-medium mb-3 ${isUnselected ? 'text-red-700' : 'text-gray-700'}`}>
-                    {text[category]}
-                    {isUnselected && <span className="text-red-500 ml-2">*</span>}
-                  </h4>
-                  <div className="space-y-2">
-                    {symptoms.map((symptom) => (
-                      <label key={symptom} className="flex items-center space-x-3 cursor-pointer hover:bg-gray-50 p-2 rounded">
-                        <input
-                          type="checkbox"
-                          checked={formData.symptoms[category].includes(symptom)}
-                          onChange={() => toggleSymptom(category, symptom)}
-                          className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                        />
-                        <span className="text-sm text-gray-700">{symptom}</span>
-                      </label>
-                    ))}
-                  </div>
+                <div key={category} className="border border-gray-200 rounded-lg">
+                  <button
+                    onClick={() => setExpandedSections(prev => ({ ...prev, [category]: !prev[category] }))}
+                    className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50"
+                  >
+                    <div className="text-left">
+                      <div className="text-sm font-medium text-gray-800">{text[category]}</div>
+                      <div className="text-xs text-gray-500">{symptomCategoryDescriptions[category]}</div>
+                    </div>
+                    <svg className={`w-4 h-4 text-gray-500 transform transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {expanded && (
+                    <div className="px-4 pb-3 space-y-2">
+                      {symptoms.map((symptom) => (
+                        <label key={symptom} className="flex items-center space-x-3 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                          <input
+                            type="checkbox"
+                            checked={formData.symptoms[category].includes(symptom)}
+                            onChange={() => toggleSymptom(category, symptom)}
+                            className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                          />
+                          <span className="text-sm text-gray-700">{symptom}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
 
-          {/* Validation error on the right (desktop only) */}
-          {!validation.isValid && (
-            <div className="hidden lg:block bg-red-50 border border-red-200 rounded-lg p-4 h-fit sticky top-0">
-              <p className="text-sm text-red-600 font-medium mb-2">
-                {text.validationError}
-              </p>
-              <ul className="text-xs text-red-600 list-disc list-inside space-y-1">
-                {validation.unselectedCategories.map(category => (
-                  <li key={category}>{text[category]}</li>
-                ))}
-              </ul>
+          {/* Right: Others input */}
+          <div className="h-fit lg:sticky lg:top-0">
+            <div className="bg-white border border-yellow-300 rounded-lg p-4">
+              <label className="block text-sm font-medium text-gray-800 mb-2">{language === 'en' ? 'Others (type any symptoms not listed)' : 'Iba pa (ilagay ang sintomas na wala sa listahan)'}</label>
+              <textarea
+                value={formData.othersSymptoms}
+                onChange={(e) => setFormData({ ...formData, othersSymptoms: e.target.value })}
+                rows="6"
+                placeholder={language === 'en' ? 'Type here...' : 'I-type dito...'}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-green-500 resize-none"
+              />
+              <p className="text-xs text-gray-500 mt-2">{language === 'en' ? 'Optional' : 'Opsyonal'}</p>
             </div>
-          )}
-
-          {/* Validation error below on mobile */}
-          {!validation.isValid && (
-            <div className="lg:hidden bg-red-50 border border-red-200 rounded-lg p-3">
-              <p className="text-sm text-red-600 font-medium mb-1">
-                {text.validationError}
-              </p>
-              <ul className="text-xs text-red-600 list-disc list-inside">
-                {validation.unselectedCategories.map(category => (
-                  <li key={category}>{text[category]}</li>
-                ))}
-              </ul>
-            </div>
-          )}
+          </div>
         </div>
       </div>
     );
@@ -776,18 +784,11 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment,
           {currentStep < 5 ? (
             <button
               onClick={() => {
-                if (currentStep === 1) {
-                  const validation = validateSymptoms();
-                  if (validation.isValid) {
-                    setCurrentStep(prev => prev + 1);
-                  }
-                } else {
-                  setCurrentStep(prev => prev + 1);
-                }
+                setCurrentStep(prev => prev + 1);
               }}
-              disabled={(currentStep === 1 && !validateSymptoms().isValid) || isLoading}
+              disabled={isLoading}
               className={`px-6 py-2 rounded-lg transition-colors ${
-                (currentStep === 1 && !validateSymptoms().isValid) || isLoading
+                isLoading
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   : 'bg-green-500 text-white hover:bg-green-600'
               }`}
