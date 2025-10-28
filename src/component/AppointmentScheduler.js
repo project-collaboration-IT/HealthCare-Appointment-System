@@ -1,13 +1,14 @@
 //This is the component for the scheduling, kinda messy but i'll try to walk yall
 // NOW CONNECTED TO DATABASE - saves appointments to Firebase!
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { findOptimalAppointmentSlot, formatRecommendationReason } from '../utils/appointmentAlgorithm';
+import { ensureDayTimes, getAllTimesRemaining, formatDateId } from '../utils/availability';
 
 //this is to initialize the states of the program - language, what page u are on, etc
 //same ito sa other files na may same block of code
 // UPDATED: Added isLoading prop to show when saving to database
-const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment, isLoading }) => {
+const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment, isLoading, refreshKey }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [recommendedSlot, setRecommendedSlot] = useState(null);
   const [showRecommendation, setShowRecommendation] = useState(false);
@@ -286,30 +287,7 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment,
           const isCurrentMonth = currentDate.getMonth() === month;
           const isWeekend = currentDate.getDay() === 0 || currentDate.getDay() === 6;
           const isPast = currentDate < new Date();
-          
-          let slots = 0;
-          let isAvailable = false;
-          
-          if (isCurrentMonth && !isWeekend && !isPast) {
-            isAvailable = true;
-
-            // ito please palitan niyo hwhahaha naka-random siya kapag
-            // pinindot niyo yung any date, in reality connected dapat sa db kung ilan nalang slots
-
-            // Generate realistic slot availability
-            const random = Math.random();
-            
-            if (random < 0.15) {
-              // 15% chance of 0 slots (fully booked)
-              slots = 0;
-            } else if (random < 0.25) {
-              // 10% chance of low slots (1-10)
-              slots = Math.floor(Math.random() * 10) + 1;
-            } else {
-              // 75% chance of good availability (20-50)
-              slots = Math.floor(Math.random() * 31) + 20;
-            }
-          }
+          const isAvailable = isCurrentMonth && !isWeekend && !isPast;
           
           weekData.push({
             date: currentDate,
@@ -318,7 +296,7 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment,
             isWeekend,
             isPast,
             isAvailable,
-            slots
+            // slots will be loaded from Firestore separately
           });
         }
         
@@ -333,6 +311,59 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment,
 
   const calendarData = generateCalendar();
 
+  // Cache of remaining slots per day (keyed by YYYY-MM-DD)
+  const [remainingByDate, setRemainingByDate] = useState({});
+  const [loadingRemaining, setLoadingRemaining] = useState(false);
+  // Cache of per-time remaining per date: { dateId: { '08-30-AM': 5, ... } }
+  const [timesByDate, setTimesByDate] = useState({});
+  const normalizeTimeKey = (timeLabel) => {
+    const match = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec(timeLabel);
+    if (!match) return timeLabel.replace(/\s+/g, '-');
+    const hour = String(parseInt(match[1], 10)).padStart(2, '0');
+    const minute = match[2];
+    const period = match[3].toUpperCase();
+    return `${hour}-${minute}-${period}`;
+  };
+
+  // Prefetch remaining slots for the visible month
+  useEffect(() => {
+    const prefetchMonth = async () => {
+      try {
+        setLoadingRemaining(true);
+        const currentMonthData = calendarData[currentMonth];
+        const fetchDates = [];
+        currentMonthData.weeks.forEach(week => {
+          week.forEach(day => {
+            if (day.isCurrentMonth && day.isAvailable) {
+              fetchDates.push(day.date);
+            }
+          });
+        });
+        const results = await Promise.all(fetchDates.map(async (d) => {
+          const times = await ensureDayTimes(d, timeSlots);
+          const total = Object.values(times || {}).reduce((s, v) => s + (typeof v === 'number' ? v : 0), 0);
+          return [formatDateId(d), { total, times }];
+        }));
+        setRemainingByDate(prev => {
+          const next = { ...prev };
+          results.forEach(([id, payload]) => { next[id] = payload.total; });
+          return next;
+        });
+        setTimesByDate(prev => {
+          const next = { ...prev };
+          results.forEach(([id, payload]) => { next[id] = payload.times; });
+          return next;
+        });
+      } catch (e) {
+        // fail silently; UI will just show unknown
+      } finally {
+        setLoadingRemaining(false);
+      }
+    };
+    prefetchMonth();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentMonth, refreshKey]);
+
   // ito naman ginawa kong between 7-11 am lang available time kasi sa centers ganon talaga
   const timeSlots = [
     '7:00 AM', '7:30 AM', '8:00 AM', '8:30 AM',
@@ -344,12 +375,16 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment,
   calendarData.forEach(month => {
     month.weeks.forEach(week => {
       week.forEach(day => {
-        if (day.isAvailable && day.slots > 0) {
-          availableDates.push({
-            date: day.date,
-            isAvailable: day.isAvailable,
-            slots: day.slots
-          });
+        if (day.isAvailable) {
+          const id = formatDateId(day.date);
+          const slots = remainingByDate[id] ?? 0;
+          if (slots > 0) {
+            availableDates.push({
+              date: day.date,
+              isAvailable: day.isAvailable,
+              slots
+            });
+          }
         }
       });
     });
@@ -496,138 +531,142 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment,
     const dayHeaders = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
     
     return (
-      <div className="space-y-4 max-h-[calc(90vh-250px)] flex flex-col">
+      <div className="space-y-4 max-h-[calc(90vh-250px)]">
         <div>
           <h3 className="text-xl font-medium text-gray-800 mb-2">{text.dateTitle}</h3>
-          <p className="text-sm text-gray-600 mb-6">{text.dateDesc}</p>
+          <p className="text-sm text-gray-600 mb-4">{text.dateDesc}</p>
         </div>
 
-{/* Add this button above the calendar in renderStep4() */}
-<div className="mb-4">
-  <button
-    onClick={() => {
-      const optimal = findOptimalAppointmentSlot(availableDates, timeSlots);
-      setRecommendedSlot(optimal);
-      setShowRecommendation(true);
-      if (optimal) {
-        setFormData({
-          ...formData,
-          selectedDate: optimal.date,
-          selectedTime: optimal.time
-        });
-        // User can stay on step 4 to see the reasoning before proceeding
-      }
-    }}
-    className="w-full py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center space-x-2"
-  >
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-    </svg>
-    <span>{language === 'en' ? 'Find Best Slot (AI)' : 'Maghanap ng Best Slot (AI)'}</span>
-  </button>
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
+          {/* Left: Calendar */}
+          <div className="flex flex-col overflow-hidden">
+            {/* Month Navigation */}
+            <div className="flex justify-between items-center mb-3">
+              <button
+                onClick={() => setCurrentMonth(prev => Math.max(0, prev - 1))}
+                disabled={currentMonth === 0}
+                className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              
+              <h4 className="text-lg font-semibold text-gray-800">
+                {currentMonthData.monthName.toUpperCase()} {currentMonthData.year}
+              </h4>
+              
+              <button
+                onClick={() => setCurrentMonth(prev => Math.min(11, prev + 1))}
+                disabled={currentMonth === 11}
+                className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
 
-  {/* Show recommendation explanation */}
-  {showRecommendation && recommendedSlot && (
-    <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-      <h4 className="font-medium text-blue-900 mb-2 flex items-center">
-        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        {language === 'en' ? 'Recommended Slot' : 'Inirerekomendang Slot'}
-      </h4>
-      <p className="text-sm text-blue-800 mb-2">
-        <strong>{recommendedSlot.date} at {recommendedSlot.time}</strong>
-      </p>
-      <pre className="text-xs text-blue-700 whitespace-pre-wrap">
-        {formatRecommendationReason(recommendedSlot, language)}
-      </pre>
-    </div>
-  )}
-</div>
-
-        {/* ito nagsstart siya sa january instead of today's month, kindly change it*/}
-        {/* Month Navigation */}
-        <div className="flex justify-between items-center mb-4">
-          <button
-            onClick={() => setCurrentMonth(prev => Math.max(0, prev - 1))}
-            disabled={currentMonth === 0}
-            className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          
-          <h4 className="text-lg font-semibold text-gray-800">
-            {currentMonthData.monthName.toUpperCase()} {currentMonthData.year}
-          </h4>
-          
-          <button
-            onClick={() => setCurrentMonth(prev => Math.min(11, prev + 1))}
-            disabled={currentMonth === 11}
-            className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Calendar Grid */}
-        <div className="border border-gray-200 rounded-lg overflow-hidden">
-          {/* Day Headers */}
-          <div className="grid grid-cols-7 bg-gray-100">
-            {dayHeaders.map((day) => (
-              <div key={day} className="p-3 text-center text-sm font-medium text-gray-600 border-r border-gray-200 last:border-r-0">
-                {day}
+            {/* Calendar Grid */}
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+              {/* Day Headers */}
+              <div className="grid grid-cols-7 bg-gray-100">
+                {dayHeaders.map((day) => (
+                  <div key={day} className="p-2 text-center text-xs font-medium text-gray-600 border-r border-gray-200 last:border-r-0">
+                    {day}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          
-          {/* Calendar Days */}
-          <div className="grid grid-cols-7">
-            {currentMonthData.weeks.map((week, weekIndex) =>
-              week.map((day, dayIndex) => {
-                const isSelected = formData.selectedDate === day.date.toDateString();
-                const isDisabled = !day.isAvailable || day.slots === 0;
-                
-                return (
-                  <button
-                    key={`${weekIndex}-${dayIndex}`}
-                    onClick={() => !isDisabled && setFormData({ ...formData, selectedDate: day.date.toDateString() })}
-                    disabled={isDisabled}
-                    className={`p-3 border-r border-b border-gray-200 last:border-r-0 min-h-[60px] flex flex-col items-center justify-center transition-all ${
-                      !day.isCurrentMonth
-                        ? 'bg-gray-50 text-gray-300'
-                        : isDisabled
-                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                        : isSelected
-                        ? 'bg-green-100 text-green-800 border-green-300'
-                        : 'hover:bg-gray-50 text-gray-800'
-                    }`}
-                  >
-                    <div className={`text-sm font-medium ${
-                      !day.isCurrentMonth ? 'text-gray-300' : 
-                      isDisabled ? 'text-gray-400' : 
-                      isSelected ? 'text-green-800' : 'text-gray-800'
-                    }`}>
-                      {day.day}
-                    </div>
+              
+              {/* Calendar Days */}
+              <div className="grid grid-cols-7">
+                {currentMonthData.weeks.map((week, weekIndex) =>
+                  week.map((day, dayIndex) => {
+                    const isSelected = formData.selectedDate === day.date.toDateString();
+                    const id = formatDateId(day.date);
+                    const remaining = remainingByDate[id];
+                    const isDisabled = !day.isAvailable || (typeof remaining === 'number' ? remaining === 0 : false);
                     
-                    {day.isCurrentMonth && day.isAvailable && (
-                      <div className={`text-xs mt-1 ${
-                        day.slots === 0
-                          ? 'text-red-500 font-medium'
-                          : day.slots < 10
-                          ? 'text-orange-600'
-                          : 'text-green-600'
-                      }`}>
-                        {day.slots === 0 ? text.fullyBooked : `${day.slots}`}
-                      </div>
-                    )}
-                  </button>
-                );
-              })
+                    return (
+                      <button
+                        key={`${weekIndex}-${dayIndex}`}
+                        onClick={() => !isDisabled && setFormData({ ...formData, selectedDate: day.date.toDateString() })}
+                        disabled={isDisabled}
+                        className={`p-2 border-r border-b border-gray-200 last:border-r-0 min-h-[44px] flex flex-col items-center justify-center transition-all ${
+                          !day.isCurrentMonth
+                            ? 'bg-gray-50 text-gray-300'
+                            : isDisabled
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            : isSelected
+                            ? 'bg-green-100 text-green-800 border-green-300'
+                            : 'hover:bg-gray-50 text-gray-800'
+                        }`}
+                      >
+                        <div className={`text-xs font-medium ${
+                          !day.isCurrentMonth ? 'text-gray-300' : 
+                          isDisabled ? 'text-gray-400' : 
+                          isSelected ? 'text-green-800' : 'text-gray-800'
+                        }`}>
+                          {day.day}
+                        </div>
+                        
+                        {day.isCurrentMonth && day.isAvailable && (
+                          <div className={`text-[10px] mt-1 ${
+                            (typeof remaining === 'number' && remaining === 0)
+                              ? 'text-red-500 font-medium'
+                              : (typeof remaining === 'number' && remaining < 10)
+                              ? 'text-orange-600'
+                              : 'text-green-600'
+                          }`}>
+                            {typeof remaining === 'number' ? (remaining === 0 ? text.fullyBooked : `${remaining}`) : (loadingRemaining ? '...' : '')}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Right: Recommendation panel */}
+          <div className="lg:sticky lg:top-0 self-start">
+            <button
+              onClick={() => {
+                const optimal = findOptimalAppointmentSlot(availableDates, timeSlots);
+                setRecommendedSlot(optimal);
+                setShowRecommendation(true);
+                if (optimal) {
+                  setFormData({
+                    ...formData,
+                    selectedDate: optimal.date,
+                    selectedTime: optimal.time
+                  });
+                }
+              }}
+              className="w-full py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center space-x-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+              <span>{language === 'en' ? 'Find Best Slot (AI)' : 'Maghanap ng Best Slot (AI)'}</span>
+            </button>
+
+            {showRecommendation && recommendedSlot && (
+              <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <h4 className="font-medium text-blue-900 mb-2 flex items-center">
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {language === 'en' ? 'Recommended Slot' : 'Inirerekomendang Slot'}
+                </h4>
+                <p className="text-sm text-blue-800 mb-2">
+                  <strong>{recommendedSlot.date} at {recommendedSlot.time}</strong>
+                </p>
+                <pre className="text-xs text-blue-700 whitespace-pre-wrap">
+                  {formatRecommendationReason(recommendedSlot, language)}
+                </pre>
+              </div>
             )}
           </div>
         </div>
@@ -645,17 +684,30 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment,
       <div className="grid grid-cols-3 gap-3">
         {timeSlots.map((time) => {
           const isSelected = formData.selectedTime === time;
+          const dayId = formData.selectedDate ? formatDateId(new Date(formData.selectedDate)) : null;
+          const perTimes = dayId ? (timesByDate[dayId] || {}) : {};
+          const key = dayId ? normalizeTimeKey(time) : null;
+          const remaining = key ? (typeof perTimes[key] === 'number' ? perTimes[key] : 5) : null;
+          const isDisabled = !formData.selectedDate || (remaining !== null && remaining === 0);
           return (
             <button
               key={time}
-              onClick={() => setFormData({ ...formData, selectedTime: time })}
+              onClick={() => !isDisabled && setFormData({ ...formData, selectedTime: time })}
+              disabled={isDisabled}
               className={`p-4 border-2 rounded-lg transition-all ${
-                isSelected
+                isDisabled
+                  ? 'border-gray-200 text-gray-400 cursor-not-allowed'
+                  : isSelected
                   ? 'border-green-500 bg-green-50'
                   : 'border-gray-200 hover:border-green-300'
               }`}
             >
               <div className="font-medium text-gray-800">{time}</div>
+              {remaining !== null && (
+                <div className={`text-xs mt-1 ${remaining === 0 ? 'text-red-500' : remaining <= 2 ? 'text-orange-600' : 'text-green-600'}`}>
+                  {remaining === 0 ? text.fullyBooked : `${remaining} / 5`}
+                </div>
+              )}
             </button>
           );
         })}

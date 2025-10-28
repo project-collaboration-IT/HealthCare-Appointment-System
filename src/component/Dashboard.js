@@ -10,6 +10,7 @@ import {
   updateAppointment,      // Edit existing appointment
   deleteAppointment       // Delete appointment
 } from '../utils/api';
+import { decrementTimeRemaining, incrementTimeRemaining } from '../utils/availability';
 
 //daming initialization 'no
   const Dashboard = ({ language, userData, onLogout }) => {
@@ -28,6 +29,8 @@ import {
   // NEW: States for loading and error handling
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  // Trigger availability refresh in scheduler
+  const [availabilityRefreshKey, setAvailabilityRefreshKey] = useState(0);
 
   // NEW: Load appointments when component mounts
   // useEffect runs automatically when the component loads or when userData changes
@@ -210,11 +213,28 @@ import {
         // EDIT MODE: Update existing appointment in database
         console.log('Updating appointment:', editingAppointment.id);
         
+        // If date/time changed, adjust availability: increment old, decrement new
+        try {
+          const oldDateStr = editingAppointment.selectedDate;
+          const newDateStr = appointmentData.selectedDate;
+          const oldTime = editingAppointment.selectedTime;
+          const newTime = appointmentData.selectedTime;
+          if (oldDateStr && oldTime) {
+            await incrementTimeRemaining(new Date(oldDateStr), oldTime);
+          }
+          if (newDateStr && newTime) {
+            await decrementTimeRemaining(new Date(newDateStr), newTime);
+          }
+        } catch (e) {
+          console.warn('Availability adjustment during update failed:', e);
+        }
+
         // Call API to update appointment
         await updateAppointment(editingAppointment.id, appointmentData);
         
         // Reload appointments from database to get updated data
         await loadAppointments();
+        setAvailabilityRefreshKey(k => k + 1);
         
         setEditingAppointment(null);
       } else {
@@ -223,6 +243,11 @@ import {
         
         // Call API to create appointment
         await createAppointment(userData.id, appointmentData);
+        // Decrement per-time remaining for the selected date + time
+        if (appointmentData.selectedDate && appointmentData.selectedTime) {
+          await decrementTimeRemaining(new Date(appointmentData.selectedDate), appointmentData.selectedTime);
+        }
+        setAvailabilityRefreshKey(k => k + 1);
         
         // Reload appointments from database to get new appointment
         await loadAppointments();
@@ -269,6 +294,12 @@ import {
       
       // Call API to delete appointment from database
       await deleteAppointment(appointmentToDelete);
+      // Try to increment availability for the exact time slot
+      const appt = appointments.find(a => a.id === appointmentToDelete);
+      if (appt && appt.selectedDate && appt.selectedTime) {
+        await incrementTimeRemaining(new Date(appt.selectedDate), appt.selectedTime);
+      }
+      setAvailabilityRefreshKey(k => k + 1);
       
       // Reload appointments to refresh the list
       await loadAppointments();
@@ -841,6 +872,7 @@ import {
           onSubmit={handleAppointmentSubmit}
           editingAppointment={editingAppointment}
           isLoading={isLoading}  // Pass loading state
+          refreshKey={availabilityRefreshKey}
         />
       )}
     </div>

@@ -70,6 +70,8 @@ const Login = ({ language, onLogin, onBack }) => {
     }
   };
 
+  
+
   return (
     <div className="min-h-screen bg-white flex items-center justify-center p-4">
       <div className="max-w-md w-full">
@@ -136,13 +138,14 @@ const Login = ({ language, onLogin, onBack }) => {
           </button>
         </div>
 
-        <button
-          onClick={onBack}
-          disabled={isLoading}
-          className="w-full mt-4 py-3 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-        >
-          {text.backBtn}
-        </button>
+            <button
+              onClick={onBack}
+              disabled={isLoading}
+              className="w-full mt-4 py-3 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              {text.backBtn}
+            </button>
+        
       </div>
     </div>
   );

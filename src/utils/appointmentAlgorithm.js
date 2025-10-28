@@ -26,7 +26,7 @@ export const findOptimalAppointmentSlot = (availableDates, timeSlots) => {
     const dateScore = Math.max(0, 100 - daysFromToday); // Closer dates = higher score
 
     // Calculate availability score
-    const availabilityScore = dateObj.slots; // More slots = higher score
+    const availabilityScore = dateObj.slots; // More slots = higher score (daily total)
 
     // Evaluate each time slot for this date
     for (const timeSlot of timeSlots) {
@@ -35,10 +35,17 @@ export const findOptimalAppointmentSlot = (availableDates, timeSlots) => {
 
       // GREEDY CHOICE: Calculate total score
       // Weighted formula: date (40%) + availability (40%) + time (20%)
-      const totalScore = 
-        (dateScore * 0.4) + 
-        (availabilityScore * 0.4) + 
-        (timeScore * 0.2);
+      // With per-time-slot capacity (5 per slot), prefer times with more remaining.
+      // If dateObj.timesRemainingPerSlot exists (map of time->remaining), incorporate it.
+      const perTimeRemaining = (dateObj.timesRemainingPerSlot && typeof dateObj.timesRemainingPerSlot[timeSlot] === 'number')
+        ? dateObj.timesRemainingPerSlot[timeSlot]
+        : 5; // default capacity
+
+      const totalScore =
+        (dateScore * 0.35) +
+        (availabilityScore * 0.25) +
+        (timeScore * 0.20) +
+        (perTimeRemaining * 0.20);
 
       // Select this slot if it has the highest score so far (greedy selection)
       if (totalScore > bestScore) {

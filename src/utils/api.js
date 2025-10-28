@@ -264,3 +264,56 @@ export const deleteAppointment = async (appointmentId) => {
     throw error;
   }
 };
+
+// REQUEST: Self-service password reset by verifying user identity fields
+export const resetPasswordSelf = async (payload) => {
+  // payload: { firstName, lastName, barangay, number, newPassword }
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/reset-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const contentType = response.headers.get('content-type') || '';
+    const body = contentType.includes('application/json') ? await response.json() : await response.text();
+
+    if (!response.ok) {
+      const message = typeof body === 'object' && body !== null ? (body.message || JSON.stringify(body)) : (body || `${response.status} ${response.statusText}`);
+      throw new Error(message);
+    }
+
+    return typeof body === 'object' && body !== null ? body : { success: true, message: body };
+  } catch (error) {
+    console.error('Reset password API error:', error);
+    throw error;
+  }
+};
+
+// REQUEST: Admin password reset for a specific user
+export const resetPasswordAdmin = async (userId, newPassword) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/users/${userId}/password`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ newPassword }),
+    });
+
+    const contentType = response.headers.get('content-type') || '';
+    const body = contentType.includes('application/json') ? await response.json() : await response.text();
+
+    if (!response.ok) {
+      const message = typeof body === 'object' && body !== null ? (body.message || JSON.stringify(body)) : (body || `${response.status} ${response.statusText}`);
+      throw new Error(message);
+    }
+
+    return typeof body === 'object' && body !== null ? body : { success: true, message: body };
+  } catch (error) {
+    console.error('Admin reset password API error:', error);
+    throw error;
+  }
+};
