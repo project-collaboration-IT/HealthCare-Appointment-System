@@ -1,4 +1,4 @@
-// API base URL - change this to your backend URL
+// API base URL
 const API_BASE_URL = 'http://localhost:5000/api';
 
 // Mock data for when backend is not available
