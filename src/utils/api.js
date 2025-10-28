@@ -1,5 +1,5 @@
 // API base URL - change this to your backend URL
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = 'https://healthcare-for-render.onrender.com';
 
 // Mock data for when backend is not available
 let mockAppointments = [];
