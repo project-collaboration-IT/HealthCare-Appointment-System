@@ -34,7 +34,8 @@ const Signup = ({ language, onSignup, onBack }) => {
       loginName: 'Login Name',
       confirmBtn: 'Confirm & Continue',
       editBtn: 'Edit Information',
-      required: 'This field is required'
+      required: 'This field is required',
+      invalidPhone: 'Enter a valid 11-digit phone number'
     },
     tl: {
       title: 'Gumawa ng Account',
@@ -52,11 +53,15 @@ const Signup = ({ language, onSignup, onBack }) => {
       loginName: 'Pangalan sa Pag-login',
       confirmBtn: 'Kumpirmahin at Magpatuloy',
       editBtn: 'Baguhin ang Impormasyon',
-      required: 'Kinakailangan ang field na ito'
+      required: 'Kinakailangan ang field na ito',
+      invalidPhone: 'Maglagay ng wastong 11-digit na numero'
     }
   };
 
   const text = content[language];
+
+  // Helpers for number validation
+  const extractDigits = (value) => (value || '').replace(/\D/g, '');
 
   //form validation sa signup, familiar na kau here
   const validateForm = () => {
@@ -65,7 +70,12 @@ const Signup = ({ language, onSignup, onBack }) => {
     if (!formData.lastName.trim()) newErrors.lastName = text.required;
     if (!formData.age.trim()) newErrors.age = text.required;
     if (!formData.barangay.trim()) newErrors.barangay = text.required;
-    if (!formData.number.trim()) newErrors.number = text.required;
+    const digits = extractDigits(formData.number);
+    if (!formData.number.trim()) {
+      newErrors.number = text.required;
+    } else if (digits.length !== 11) {
+      newErrors.number = text.invalidPhone;
+    }
     if (!formData.password.trim()) newErrors.password = text.required;
     
     setErrors(newErrors);
@@ -85,13 +95,14 @@ const Signup = ({ language, onSignup, onBack }) => {
     setIsLoading(true);
 
     try {
-      console.log('Calling signup API with:', formData); // Debug log
+      const digits = extractDigits(formData.number);
+      console.log('Calling signup API with:', { ...formData, number: digits }); // Debug log
       const response = await signup({
         firstName: formData.firstName,
         lastName: formData.lastName,
         age: formData.age,
         barangay: formData.barangay,
-        number: formData.number,
+        number: digits,
         password: formData.password
       });
 
@@ -160,9 +171,9 @@ const Signup = ({ language, onSignup, onBack }) => {
               <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4 mb-6">
                 <p className="text-base md:text-lg font-medium text-gray-800 mb-2">⚠️ {text.credentialsReminder}</p>
                 <div className="space-y-1">
-                  <p className="text-base md:text-lg text-gray-700"><strong>{text.loginName}:</strong> {formData.firstName}</p>
+                  <p className="text-base md:text-lg text-gray-700"><strong>{text.loginName}:</strong> {formData.firstName} {formData.lastName}</p>
+                  <p className="text-base md:text-lg text-gray-700"><strong>{text.barangay}:</strong> {formData.barangay}</p>
                   <p className="text-base md:text-lg text-gray-700"><strong>{text.password}:</strong> {formData.password}</p>
-                  <p className="text-base md:text-lg text-gray-700"><strong>{text.number}:</strong> {formData.number}</p>
                 </div>
               </div>
 
@@ -266,7 +277,7 @@ const Signup = ({ language, onSignup, onBack }) => {
               inputMode="numeric"
               placeholder="0912-345-6789"
               value={formData.number}
-              onChange={(e) => setFormData({...formData, number: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, number: e.target.value })}
               className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:border-green-500 ${errors.number ? 'border-red-500' : 'border-gray-300'}`}
             />
             {errors.number && <p className="text-red-500 text-xs mt-1">{errors.number}</p>}

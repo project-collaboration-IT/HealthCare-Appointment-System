@@ -7,6 +7,7 @@ import { login } from '../utils/api';
 const Login = ({ language, onLogin, onBack }) => {
   const [formData, setFormData] = useState({
     firstName: '',
+    lastName: '',
     barangay: '',
     password: ''
   });
@@ -17,6 +18,7 @@ const Login = ({ language, onLogin, onBack }) => {
     en: {
       title: 'Welcome Back',
       firstName: 'First Name',
+      lastName: 'Last Name',
       barangay: 'Barangay Address',
       password: 'Password',
       loginBtn: 'Log In',
@@ -26,6 +28,7 @@ const Login = ({ language, onLogin, onBack }) => {
     tl: {
       title: 'Maligayang Pagbabalik',
       firstName: 'Pangalan',
+      lastName: 'Apelyido',
       barangay: 'Address ng Barangay',
       password: 'Password',
       loginBtn: 'Mag-login',
@@ -41,7 +44,7 @@ const Login = ({ language, onLogin, onBack }) => {
     setError('');
     
     // Validate input
-    if (!formData.firstName.trim() || !formData.barangay.trim() || !formData.password.trim()) {
+    if (!formData.firstName.trim() || !formData.lastName.trim() || !formData.barangay.trim() || !formData.password.trim()) {
       setError(language === 'en' ? 'Please fill in all fields' : 'Pakipunan ang lahat ng fields');
       return;
     }
@@ -53,6 +56,7 @@ const Login = ({ language, onLogin, onBack }) => {
       // Call login API
       const response = await login({
         firstName: formData.firstName,
+        lastName: formData.lastName,
         barangay: formData.barangay,
         password: formData.password
       });
@@ -98,6 +102,17 @@ const Login = ({ language, onLogin, onBack }) => {
               type="text"
               value={formData.firstName}
               onChange={(e) => setFormData({...formData, firstName: e.target.value})}
+              disabled={isLoading}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-green-500 disabled:bg-gray-100"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-600 mb-2">{text.lastName}</label>
+            <input
+              type="text"
+              value={formData.lastName}
+              onChange={(e) => setFormData({...formData, lastName: e.target.value})}
               disabled={isLoading}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-green-500 disabled:bg-gray-100"
             />
