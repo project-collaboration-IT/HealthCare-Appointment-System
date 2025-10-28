@@ -139,5 +139,5 @@ export default function App() {
   // ito yung kung saan magloloading si page sa unang refersh
   // change this to "AdminPanel" para makita or ma-test yung database
   // LanguageSelection onSelectLanguage={handleLanguageSelect} to go back
-  return <LanguageSelection onSelectLanguage={handleLanguageSelect} />;
+  return <AdminPanel/>
 }
