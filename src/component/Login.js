@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { login } from '../utils/api';
 
 //ito ung mga hihingin, change it kung needed
-const Login = ({ language, onLogin }) => {
+const Login = ({ language, onLogin, onBack }) => {
   const [formData, setFormData] = useState({
     firstName: '',
     barangay: '',
@@ -137,7 +137,7 @@ const Login = ({ language, onLogin }) => {
         </div>
 
         <button
-          onClick={() => window.location.reload()}
+          onClick={onBack}
           disabled={isLoading}
           className="w-full mt-4 py-3 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
         >

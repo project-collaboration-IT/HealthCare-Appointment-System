@@ -2,15 +2,18 @@
 // NOW CONNECTED TO DATABASE - saves appointments to Firebase!
 
 import { useState } from 'react';
+import { findOptimalAppointmentSlot, formatRecommendationReason } from '../utils/appointmentAlgorithm';
 
 //this is to initialize the states of the program - language, what page u are on, etc
 //same ito sa other files na may same block of code
 // UPDATED: Added isLoading prop to show when saving to database
 const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment, isLoading }) => {
   const [currentStep, setCurrentStep] = useState(1);
+  const [recommendedSlot, setRecommendedSlot] = useState(null);
+  const [showRecommendation, setShowRecommendation] = useState(false);
   //itong setCurrentStep or anything na kasunod ng "setCurrent" is used to replace whatever value was
   //then itong "useState" is the memory of React so diyan naka store ang data.
-  const [currentMonth, setCurrentMonth] = useState(0); // 0 = January, 1 = February, etc.
+  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth()); // Start at current month
   const [formData, setFormData] = useState({
     //under this is yung mga checkboxes ng symptoms
     symptoms: editingAppointment?.symptoms || {
@@ -336,6 +339,22 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment,
     '9:00 AM', '9:30 AM', '10:00 AM', '10:30 AM', '11:00 AM'
   ];
 
+  // Extract available dates from calendar data for the algorithm
+  const availableDates = [];
+  calendarData.forEach(month => {
+    month.weeks.forEach(week => {
+      week.forEach(day => {
+        if (day.isAvailable && day.slots > 0) {
+          availableDates.push({
+            date: day.date,
+            isAvailable: day.isAvailable,
+            slots: day.slots
+          });
+        }
+      });
+    });
+  });
+
   //ito validations ng checked boxes
   const validateSymptoms = () => {
     const symptomCategories = Object.keys(formData.symptoms);
@@ -370,13 +389,59 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment,
     const validation = validateSymptoms();
     
     return (
-      <div className="space-y-6">
+      <div className="space-y-4">
         <div>
           <h3 className="text-xl font-medium text-gray-800 mb-2">{text.symptomsTitle}</h3>
-          <p className="text-sm text-gray-600 mb-6">{text.symptomsDesc}</p>
-          
+          <p className="text-sm text-gray-600 mb-4">{text.symptomsDesc}</p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4 max-h-[calc(90vh-250px)]">
+          {/* Checkboxes on the left */}
+          <div className="overflow-y-auto pr-2 space-y-4">
+            {Object.entries(symptomCategories).map(([category, symptoms]) => {
+              const isUnselected = validation.unselectedCategories.includes(category);
+              
+              return (
+                <div key={category} className={`border-b border-gray-200 pb-4 ${isUnselected ? 'bg-red-50 rounded-lg p-3' : ''}`}>
+                  <h4 className={`font-medium mb-3 ${isUnselected ? 'text-red-700' : 'text-gray-700'}`}>
+                    {text[category]}
+                    {isUnselected && <span className="text-red-500 ml-2">*</span>}
+                  </h4>
+                  <div className="space-y-2">
+                    {symptoms.map((symptom) => (
+                      <label key={symptom} className="flex items-center space-x-3 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                        <input
+                          type="checkbox"
+                          checked={formData.symptoms[category].includes(symptom)}
+                          onChange={() => toggleSymptom(category, symptom)}
+                          className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                        />
+                        <span className="text-sm text-gray-700">{symptom}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Validation error on the right (desktop only) */}
           {!validation.isValid && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+            <div className="hidden lg:block bg-red-50 border border-red-200 rounded-lg p-4 h-fit sticky top-0">
+              <p className="text-sm text-red-600 font-medium mb-2">
+                {text.validationError}
+              </p>
+              <ul className="text-xs text-red-600 list-disc list-inside space-y-1">
+                {validation.unselectedCategories.map(category => (
+                  <li key={category}>{text[category]}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Validation error below on mobile */}
+          {!validation.isValid && (
+            <div className="lg:hidden bg-red-50 border border-red-200 rounded-lg p-3">
               <p className="text-sm text-red-600 font-medium mb-1">
                 {text.validationError}
               </p>
@@ -388,83 +453,97 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment,
             </div>
           )}
         </div>
-
-        <div className="max-h-96 overflow-y-auto space-y-6 pr-2">
-          {Object.entries(symptomCategories).map(([category, symptoms]) => {
-            const isUnselected = validation.unselectedCategories.includes(category);
-            
-            return (
-              <div key={category} className={`border-b border-gray-200 pb-4 ${isUnselected ? 'bg-red-50 rounded-lg p-3' : ''}`}>
-                <h4 className={`font-medium mb-3 ${isUnselected ? 'text-red-700' : 'text-gray-700'}`}>
-                  {text[category]}
-                  {isUnselected && <span className="text-red-500 ml-2">*</span>}
-                </h4>
-                <div className="space-y-2">
-                  {symptoms.map((symptom) => (
-                    <label key={symptom} className="flex items-center space-x-3 cursor-pointer hover:bg-gray-50 p-2 rounded">
-                      <input
-                        type="checkbox"
-                        checked={formData.symptoms[category].includes(symptom)}
-                        onChange={() => toggleSymptom(category, symptom)}
-                        className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                      />
-                      <span className="text-sm text-gray-700">{symptom}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
       </div>
     );
   };
 
   const renderStep2 = () => (
-    <div className="space-y-6">
+    <div className="space-y-4 h-[calc(90vh-250px)] flex flex-col">
       <div>
         <h3 className="text-xl font-medium text-gray-800 mb-2">{text.mealsTitle}</h3>
-        <p className="text-sm text-gray-600 mb-6">{text.mealsDesc}</p>
+        <p className="text-sm text-gray-600">{text.mealsDesc}</p>
       </div>
 
       <textarea
         value={formData.recentMeals}
         onChange={(e) => setFormData({ ...formData, recentMeals: e.target.value })}
         placeholder={text.mealsPlaceholder}
-        rows="10"
-        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-green-500 resize-none"
+        rows="12"
+        className="flex-1 w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-green-500 resize-none"
       />
     </div>
   );
 
   const renderStep3 = () => (
-    <div className="space-y-6">
+    <div className="space-y-4 h-[calc(90vh-250px)] flex flex-col">
       <div>
         <h3 className="text-xl font-medium text-gray-800 mb-2">{text.medicationsTitle}</h3>
-        <p className="text-sm text-gray-600 mb-6">{text.medicationsDesc}</p>
+        <p className="text-sm text-gray-600">{text.medicationsDesc}</p>
       </div>
 
       <textarea
         value={formData.medications}
         onChange={(e) => setFormData({ ...formData, medications: e.target.value })}
         placeholder={text.medicationsPlaceholder}
-        rows="10"
-        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-green-500 resize-none"
+        rows="12"
+        className="flex-1 w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-green-500 resize-none"
       />
     </div>
   );
-
+  
   const renderStep4 = () => {
     const currentMonthData = calendarData[currentMonth];
     const dayHeaders = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
     
     return (
-      <div className="space-y-6">
+      <div className="space-y-4 max-h-[calc(90vh-250px)] flex flex-col">
         <div>
           <h3 className="text-xl font-medium text-gray-800 mb-2">{text.dateTitle}</h3>
           <p className="text-sm text-gray-600 mb-6">{text.dateDesc}</p>
         </div>
 
+{/* Add this button above the calendar in renderStep4() */}
+<div className="mb-4">
+  <button
+    onClick={() => {
+      const optimal = findOptimalAppointmentSlot(availableDates, timeSlots);
+      setRecommendedSlot(optimal);
+      setShowRecommendation(true);
+      if (optimal) {
+        setFormData({
+          ...formData,
+          selectedDate: optimal.date,
+          selectedTime: optimal.time
+        });
+        // User can stay on step 4 to see the reasoning before proceeding
+      }
+    }}
+    className="w-full py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center space-x-2"
+  >
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+    </svg>
+    <span>{language === 'en' ? 'Find Best Slot (AI)' : 'Maghanap ng Best Slot (AI)'}</span>
+  </button>
+
+  {/* Show recommendation explanation */}
+  {showRecommendation && recommendedSlot && (
+    <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+      <h4 className="font-medium text-blue-900 mb-2 flex items-center">
+        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        {language === 'en' ? 'Recommended Slot' : 'Inirerekomendang Slot'}
+      </h4>
+      <p className="text-sm text-blue-800 mb-2">
+        <strong>{recommendedSlot.date} at {recommendedSlot.time}</strong>
+      </p>
+      <pre className="text-xs text-blue-700 whitespace-pre-wrap">
+        {formatRecommendationReason(recommendedSlot, language)}
+      </pre>
+    </div>
+  )}
+</div>
 
         {/* ito nagsstart siya sa january instead of today's month, kindly change it*/}
         {/* Month Navigation */}
@@ -557,13 +636,13 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment,
   };
 
   const renderStep5 = () => (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
         <h3 className="text-xl font-medium text-gray-800 mb-2">{text.timeTitle}</h3>
-        <p className="text-sm text-gray-600 mb-6">{text.timeDesc}</p>
+        <p className="text-sm text-gray-600">{text.timeDesc}</p>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         {timeSlots.map((time) => {
           const isSelected = formData.selectedTime === time;
           return (
@@ -585,8 +664,8 @@ const AppointmentScheduler = ({ language, onClose, onSubmit, editingAppointment,
   );
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 md:p-8">
+      <div className="bg-white rounded-lg shadow-xl w-full h-full md:h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b border-gray-200">
           <div>

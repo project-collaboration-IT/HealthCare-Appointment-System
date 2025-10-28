@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { signup } from '../utils/api';
 
-const Signup = ({ language, onSignup }) => {
+const Signup = ({ language, onSignup, onBack }) => {
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -292,7 +292,7 @@ const Signup = ({ language, onSignup }) => {
         </div>
 
         <button
-          onClick={() => window.location.reload()}
+          onClick={onBack}
           className="w-full mt-4 py-3 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
         >
           {text.backBtn}

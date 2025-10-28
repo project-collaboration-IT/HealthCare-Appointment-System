@@ -76,6 +76,18 @@ export default function App() {
     setCurrentView('signup');
   };
 
+  // Navigate back to landing from auth forms without reloading
+  const handleBack = () => {
+    setCurrentView('landing');
+  };
+
+  // Allow changing language without full page reload
+  const handleChangeLanguage = () => {
+    // Do not wipe user data here; only reset language flow
+    setSelectedLanguage(null);
+    setCurrentView('languageSelection');
+  };
+
     // NEW: Handle logout - clears all saved data
   const handleLogout = () => {
     console.log('Logging out...'); // Debug log
@@ -104,12 +116,12 @@ export default function App() {
 
   // Show Login Form
   if (currentView === 'login') {
-    return <Login language={selectedLanguage} onLogin={handleLogin} />;
+    return <Login language={selectedLanguage} onLogin={handleLogin} onBack={handleBack} />;
   }
 
   // Show Signup Form
   if (currentView === 'signup') {
-    return <Signup language={selectedLanguage} onSignup={handleSignup} />;
+    return <Signup language={selectedLanguage} onSignup={handleSignup} onBack={handleBack} />;
   }
 
   // Show Landing Page (Login/Signup options)
@@ -119,6 +131,7 @@ export default function App() {
         language={selectedLanguage} 
         onLoginClick={handleLoginClick}
         onSignupClick={handleSignupClick}
+        onChangeLanguage={handleChangeLanguage}
       />
     );
   }
