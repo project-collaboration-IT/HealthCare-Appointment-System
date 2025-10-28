@@ -1,7 +1,19 @@
-import { useState } from 'react';
-import AppointmentScheduler from './AppointmentScheduler';
+//ito pinakamahaba omfg sobra talaga
+//NOW WITH DATABASE CONNECTION! - updated to connect to Firebase via backend API
 
-const Dashboard = ({ language, userData }) => {
+import { useState, useEffect, useCallback } from 'react';
+import AppointmentScheduler from './AppointmentScheduler';
+// Import API functions to communicate with backend
+import { 
+  getUserAppointments,    // Get all appointments for a user
+  createAppointment,      // Create new appointment
+  updateAppointment,      // Edit existing appointment
+  deleteAppointment       // Delete appointment
+} from '../utils/api';
+import { decrementTimeRemaining, incrementTimeRemaining } from '../utils/availability';
+
+//daming initialization 'no
+  const Dashboard = ({ language, userData, onLogout }) => {
   const [showAccountInfo, setShowAccountInfo] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showContact, setShowContact] = useState(false);
@@ -14,7 +26,51 @@ const Dashboard = ({ language, userData }) => {
   const [editingAppointment, setEditingAppointment] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [appointmentToDelete, setAppointmentToDelete] = useState(null);
+  // NEW: States for loading and error handling
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  // Trigger availability refresh in scheduler
+  const [availabilityRefreshKey, setAvailabilityRefreshKey] = useState(0);
 
+  // NEW: Load appointments when component mounts
+  // useEffect runs automatically when the component loads or when userData changes
+  useEffect(() => {
+    if (userData && userData.id) {
+      loadAppointments();
+    }
+  }, [userData]); // This runs whenever userData changes
+
+  // NEW: Function to load user's appointments from database
+  // Using useCallback to memoize the function and prevent unnecessary re-renders
+  const loadAppointments = useCallback(async () => {
+    try {
+      setIsLoading(true);  // Show loading state
+      setError('');        // Clear any previous errors
+      
+      // Call API to get appointments for this user
+      const response = await getUserAppointments(userData.id);
+      
+      // Update state with appointments from database
+      setAppointments(response.appointments || []);
+      
+      console.log('Appointments loaded:', response.appointments);
+    } catch (error) {
+      console.error('Error loading appointments:', error);
+      setError(error.message);
+    } finally {
+      setIsLoading(false);  // Hide loading state
+    }
+  }, [userData.id]); // Only recreate when userData.id changes
+
+  // NEW: Load appointments when component mounts
+  // useEffect runs automatically when the component loads or when userData changes
+  useEffect(() => {
+    if (userData && userData.id) {
+      loadAppointments();
+    }
+  }, [userData, loadAppointments]); // Include loadAppointments in dependencies
+
+  //haba rin nito, 'di ako makaisip ng other way para maimprove ito
   const content = {
     en: {
       welcome: 'Welcome',
@@ -57,7 +113,11 @@ const Dashboard = ({ language, userData }) => {
       confirm: 'Confirm',
       delete: 'Delete',
       edit: 'Edit',
-      saveChanges: 'Save Changes'
+      saveChanges: 'Save Changes',
+      loading: 'Loading...',
+      error: 'Error',
+      savingAppointment: 'Saving appointment...',
+      deletingAppointment: 'Deleting appointment...'
     },
     tl: {
       welcome: 'Maligayang Pagdating',
@@ -100,7 +160,11 @@ const Dashboard = ({ language, userData }) => {
       confirm: 'Kumpirmahin',
       delete: 'Tanggalin',
       edit: 'I-edit',
-      saveChanges: 'I-save ang mga Pagbabago'
+      saveChanges: 'I-save ang mga Pagbabago',
+      loading: 'Naglo-load...',
+      error: 'May Error',
+      savingAppointment: 'Nag-se-save ng appointment...',
+      deletingAppointment: 'Tinatanggal ang appointment...'
     }
   };
 
@@ -129,6 +193,7 @@ const Dashboard = ({ language, userData }) => {
     }
   ];
 
+  //ito simple logic for the carousel, change this too
   const nextSlide = () => {
     setCurrentSlide((prev) => (prev + 1) % announcements.length);
   };
@@ -137,28 +202,72 @@ const Dashboard = ({ language, userData }) => {
     setCurrentSlide((prev) => (prev - 1 + announcements.length) % announcements.length);
   };
 
-  const handleAppointmentSubmit = (appointmentData) => {
-    if (editingAppointment) {
-      // Update existing appointment
-      setAppointments(prev => prev.map(app => 
-        app.id === editingAppointment.id 
-          ? { ...app, ...appointmentData, status: 'confirmed' }
-          : app
-      ));
-      setEditingAppointment(null);
-    } else {
-      // Create new appointment
-      const newAppointment = {
-        id: Date.now(),
-        ...appointmentData,
-        status: 'confirmed'
-      };
-      setAppointments(prev => [...prev, newAppointment]);
+  // UPDATED: Handle appointment submission (CREATE or UPDATE)
+  // This function now saves to the database instead of just local state
+  const handleAppointmentSubmit = async (appointmentData) => {
+    try {
+      setIsLoading(true);
+      setError('');
+
+      if (editingAppointment) {
+        // EDIT MODE: Update existing appointment in database
+        console.log('Updating appointment:', editingAppointment.id);
+        
+        // If date/time changed, adjust availability: increment old, decrement new
+        try {
+          const oldDateStr = editingAppointment.selectedDate;
+          const newDateStr = appointmentData.selectedDate;
+          const oldTime = editingAppointment.selectedTime;
+          const newTime = appointmentData.selectedTime;
+          if (oldDateStr && oldTime) {
+            await incrementTimeRemaining(new Date(oldDateStr), oldTime);
+          }
+          if (newDateStr && newTime) {
+            await decrementTimeRemaining(new Date(newDateStr), newTime);
+          }
+        } catch (e) {
+          console.warn('Availability adjustment during update failed:', e);
+        }
+
+        // Call API to update appointment
+        await updateAppointment(editingAppointment.id, appointmentData);
+        
+        // Reload appointments from database to get updated data
+        await loadAppointments();
+        setAvailabilityRefreshKey(k => k + 1);
+        
+        setEditingAppointment(null);
+      } else {
+        // CREATE MODE: Create new appointment in database
+        console.log('Creating new appointment for user:', userData.id);
+        
+        // Call API to create appointment
+        await createAppointment(userData.id, appointmentData);
+        // Decrement per-time remaining for the selected date + time
+        if (appointmentData.selectedDate && appointmentData.selectedTime) {
+          await decrementTimeRemaining(new Date(appointmentData.selectedDate), appointmentData.selectedTime);
+        }
+        setAvailabilityRefreshKey(k => k + 1);
+        
+        // Reload appointments from database to get new appointment
+        await loadAppointments();
+      }
+
+      // Close the scheduler modal
+      setShowScheduler(false);
+      
+      console.log('Appointment saved successfully!');
+    } catch (error) {
+      console.error('Error saving appointment:', error);
+      setError(error.message);
+      // Don't close the scheduler so user can try again
+    } finally {
+      setIsLoading(false);
     }
-    setShowScheduler(false);
-    console.log('Appointment submitted:', appointmentData);
   };
 
+  //itong mga handlers, setters and such, para to sa
+  //mga screen na ise-set kung anong makikita niyo sa page
   const handleViewAppointmentDetails = (appointment) => {
     setSelectedAppointment(appointment);
     setShowAppointmentDetails(true);
@@ -175,17 +284,44 @@ const Dashboard = ({ language, userData }) => {
     setShowDeleteConfirm(true);
   };
 
-  const confirmDeleteAppointment = () => {
-    setAppointments(prev => prev.filter(app => app.id !== appointmentToDelete));
-    setShowAppointmentDetails(false);
-    setSelectedAppointment(null);
-    setShowDeleteConfirm(false);
-    setAppointmentToDelete(null);
+  // UPDATED: Delete appointment from database
+  const confirmDeleteAppointment = async () => {
+    try {
+      setIsLoading(true);
+      setError('');
+
+      console.log('Deleting appointment:', appointmentToDelete);
+      
+      // Call API to delete appointment from database
+      await deleteAppointment(appointmentToDelete);
+      // Try to increment availability for the exact time slot
+      const appt = appointments.find(a => a.id === appointmentToDelete);
+      if (appt && appt.selectedDate && appt.selectedTime) {
+        await incrementTimeRemaining(new Date(appt.selectedDate), appt.selectedTime);
+      }
+      setAvailabilityRefreshKey(k => k + 1);
+      
+      // Reload appointments to refresh the list
+      await loadAppointments();
+      
+      // Close all modals
+      setShowAppointmentDetails(false);
+      setSelectedAppointment(null);
+      setShowDeleteConfirm(false);
+      setAppointmentToDelete(null);
+      
+      console.log('Appointment deleted successfully!');
+    } catch (error) {
+      console.error('Error deleting appointment:', error);
+      setError(error.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* HEADER */}
+      {/* Ito ang header, dito nakalagay si settings and account info tapos si upper left na introduction*/}
       <div className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
           <div>
@@ -219,7 +355,7 @@ const Dashboard = ({ language, userData }) => {
         </div>
       </div>
 
-      {/* ACCOUNT INFO MODAL */}
+      {/* here nakalagay yung display account info na nilagay sa signup */}
       {showAccountInfo && (
         <>
           <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={() => setShowAccountInfo(false)} />
@@ -264,7 +400,7 @@ const Dashboard = ({ language, userData }) => {
         </>
       )}
 
-      {/* SETTINGS MODAL */}
+      {/* eto yung nasa loob ng settigns */}
       {showSettings && (
         <>
           <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={() => setShowSettings(false)} />
@@ -288,7 +424,8 @@ const Dashboard = ({ language, userData }) => {
                       </svg>
                       <span className="text-gray-700">{text.themeLabel}</span>
                     </div>
-                    
+
+                    {/* DI KO PA NALALAGYAN NG LOGIC TO KAYA NDI GAGANA*/}
                     <button
                       onClick={() => setDarkMode(!darkMode)}
                       className={`relative w-14 h-7 rounded-full transition-colors ${darkMode ? 'bg-green-500' : 'bg-gray-300'}`}
@@ -320,7 +457,7 @@ const Dashboard = ({ language, userData }) => {
                 </button>
                 
                 <button
-                  onClick={() => window.location.reload()}
+                  onClick={onLogout}
                   className="w-full border-2 border-red-500 text-red-600 rounded-lg p-4 hover:bg-red-50 transition-colors flex items-center justify-center space-x-3"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -334,7 +471,7 @@ const Dashboard = ({ language, userData }) => {
         </>
       )}
 
-      {/* CONTACT MODAL */}
+      {/* ito yungh ieedit niyo sa "contact us" */}
       {showContact && (
         <>
           <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={() => setShowContact(false)} />
@@ -399,7 +536,7 @@ const Dashboard = ({ language, userData }) => {
         </>
       )}
 
-      {/* APPOINTMENT DETAILS MODAL */}
+      {/* ito 'yung lalabas kung anong info ng appointment */}
       {showAppointmentDetails && selectedAppointment && (
         <>
           <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={() => setShowAppointmentDetails(false)} />
@@ -486,7 +623,8 @@ const Dashboard = ({ language, userData }) => {
               <div className="flex justify-between items-center p-6 border-t border-gray-200">
                 <button
                   onClick={() => handleDeleteAppointment(selectedAppointment.id)}
-                  className="px-6 py-2 border-2 border-red-500 text-red-500 rounded-lg hover:bg-red-50 transition-colors flex items-center space-x-2"
+                  disabled={isLoading}
+                  className="px-6 py-2 border-2 border-red-500 text-red-500 rounded-lg hover:bg-red-50 transition-colors flex items-center space-x-2 disabled:opacity-50"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -503,7 +641,8 @@ const Dashboard = ({ language, userData }) => {
                   </button>
                   <button
                     onClick={() => handleEditAppointment(selectedAppointment)}
-                    className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center space-x-2"
+                    disabled={isLoading}
+                    className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center space-x-2 disabled:opacity-50"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -520,7 +659,7 @@ const Dashboard = ({ language, userData }) => {
       {/* DELETE CONFIRMATION MODAL */}
       {showDeleteConfirm && (
         <>
-          <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={() => setShowDeleteConfirm(false)} />
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={() => !isLoading && setShowDeleteConfirm(false)} />
           <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
               <div className="flex items-center space-x-3 mb-4">
@@ -534,16 +673,29 @@ const Dashboard = ({ language, userData }) => {
               
               <p className="text-gray-600 mb-6">{text.confirmDelete}</p>
               
+              {/* Show loading state when deleting */}
+              {isLoading && (
+                <div className="mb-4 flex items-center justify-center space-x-2 text-gray-600">
+                  <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span>{text.deletingAppointment}</span>
+                </div>
+              )}
+              
               <div className="flex justify-end space-x-3">
                 <button
                   onClick={() => setShowDeleteConfirm(false)}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  disabled={isLoading}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
                 >
                   {text.cancel}
                 </button>
                 <button
                   onClick={confirmDeleteAppointment}
-                  className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                  disabled={isLoading}
+                  className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50"
                 >
                   {text.delete}
                 </button>
@@ -553,7 +705,7 @@ const Dashboard = ({ language, userData }) => {
         </>
       )}
 
-      {/* MAIN DASHBOARD CONTENT */}
+      {/* DASHBOARD CONTENT */}
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="grid gap-6 lg:grid-cols-2">
           
@@ -616,7 +768,8 @@ const Dashboard = ({ language, userData }) => {
             {/* Schedule New Appointment Button */}
             <button 
               onClick={() => setShowScheduler(true)}
-              className="w-full bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow text-left group"
+              disabled={isLoading}
+              className="w-full bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow text-left group disabled:opacity-50"
             >
               <div className="flex items-center justify-between">
                 <h3 className="text-xl font-medium text-gray-800">{text.scheduleBtn}</h3>
@@ -630,48 +783,75 @@ const Dashboard = ({ language, userData }) => {
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h3 className="text-xl font-medium text-gray-800 mb-4">{text.appointmentSummary}</h3>
 
-              {appointments.length === 0 ? (
+              {/* Show loading state */}
+              {isLoading && (
                 <div className="text-center py-12">
-                  <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  <svg className="animate-spin h-12 w-12 text-green-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <p className="text-gray-500 mb-4">{text.noAppointment}</p>
-                  <button 
-                    onClick={() => setShowScheduler(true)}
-                    className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+                  <p className="text-gray-500">{text.loading}</p>
+                </div>
+              )}
+
+              {/* Show error state */}
+              {error && !isLoading && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                  <p className="text-red-600 text-sm">{text.error}: {error}</p>
+                  <button
+                    onClick={loadAppointments}
+                    className="mt-2 text-sm text-red-600 underline hover:text-red-700"
                   >
-                    {text.scheduleNow}
+                    Try Again
                   </button>
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {appointments.map((appointment) => (
-                    <div key={appointment.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex justify-between items-start mb-3">
-                        <div>
-                          <h4 className="font-medium text-gray-800">
-                            {language === 'en' ? 'Health Check-up' : 'Health Check-up'}
-                          </h4>
-                          <p className="text-sm text-gray-500 mt-1">
-                            {language === 'en' ? 'Date & Time' : 'Petsa at Oras'}
-                          </p>
-                          <p className="text-sm text-gray-800">
-                            {appointment.selectedDate} - {appointment.selectedTime}
-                          </p>
+              )}
+
+              {/* Show appointments or empty state */}
+              {!isLoading && !error && (
+                appointments.length === 0 ? (
+                  <div className="text-center py-12">
+                    <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <p className="text-gray-500 mb-4">{text.noAppointment}</p>
+                    <button 
+                      onClick={() => setShowScheduler(true)}
+                      className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+                    >
+                      {text.scheduleNow}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {appointments.map((appointment) => (
+                      <div key={appointment.id} className="border border-gray-200 rounded-lg p-4">
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <h4 className="font-medium text-gray-800">
+                              {language === 'en' ? 'Health Check-up' : 'Health Check-up'}
+                            </h4>
+                            <p className="text-sm text-gray-500 mt-1">
+                              {language === 'en' ? 'Date & Time' : 'Petsa at Oras'}
+                            </p>
+                            <p className="text-sm text-gray-800">
+                              {appointment.selectedDate} - {appointment.selectedTime}
+                            </p>
+                          </div>
+                          <span className="px-3 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                            {language === 'en' ? 'Confirmed' : 'Nakumpirma'}
+                          </span>
                         </div>
-                        <span className="px-3 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                          {language === 'en' ? 'Confirmed' : 'Nakumpirma'}
-                        </span>
+                        <button 
+                          onClick={() => handleViewAppointmentDetails(appointment)}
+                          className="w-full py-2 border border-green-500 text-green-500 rounded-lg hover:bg-green-50 transition-colors text-sm"
+                        >
+                          {text.viewDetails}
+                        </button>
                       </div>
-                      <button 
-                        onClick={() => handleViewAppointmentDetails(appointment)}
-                        className="w-full py-2 border border-green-500 text-green-500 rounded-lg hover:bg-green-50 transition-colors text-sm"
-                      >
-                        {text.viewDetails}
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )
               )}
             </div>
           </div>
@@ -679,15 +859,20 @@ const Dashboard = ({ language, userData }) => {
       </div>
 
       {/* Appointment Scheduler Modal */}
+      {/* UPDATED: Pass isLoading to show loading state in modal */}
       {showScheduler && (
         <AppointmentScheduler
           language={language}
           onClose={() => {
-            setShowScheduler(false);
-            setEditingAppointment(null);
+            if (!isLoading) {  // Don't allow closing while saving
+              setShowScheduler(false);
+              setEditingAppointment(null);
+            }
           }}
           onSubmit={handleAppointmentSubmit}
           editingAppointment={editingAppointment}
+          isLoading={isLoading}  // Pass loading state
+          refreshKey={availabilityRefreshKey}
         />
       )}
     </div>

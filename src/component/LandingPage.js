@@ -1,7 +1,8 @@
 //this is for the landing page
 import { useState } from 'react';
 
-const LandingPage = ({ language, onLoginClick, onSignupClick }) => {
+//again, this is for the language
+const LandingPage = ({ language, onLoginClick, onSignupClick, onChangeLanguage }) => {
   const content = {
     en: {
       title: 'Healthcare Portal',
@@ -21,6 +22,7 @@ const LandingPage = ({ language, onLoginClick, onSignupClick }) => {
 
   const text = content[language];
 
+  //ito si log in and sign up button click
   return (
     <div className="min-h-screen bg-white flex items-center justify-center p-4">
       <div className="max-w-md w-full">
@@ -52,7 +54,7 @@ const LandingPage = ({ language, onLoginClick, onSignupClick }) => {
 
         <div className="mt-8 text-center">
           <button
-            onClick={() => window.location.reload()}
+            onClick={onChangeLanguage}
             className="text-sm text-gray-400 hover:text-gray-600 transition-colors duration-200"
           >
             {language === 'en' ? 'Change Language' : 'Baguhin ang Wika'}
