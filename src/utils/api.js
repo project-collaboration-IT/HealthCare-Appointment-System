@@ -1,5 +1,5 @@
 // API base URL - change this to your backend URL
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = 'https://healthcare-for-render.onrender.com/api';
 
 // Mock data for when backend is not available
 let mockAppointments = [];
@@ -9,8 +9,25 @@ let nextUserId = 1;
 
 // Helper function to check if we should use mock data
 const shouldUseMockData = () => {
-  // Now using real backend - set to false
+  // Set to true if backend is down for testing
   return false;
+};
+
+// Helper function to handle API errors with fallback
+const handleApiError = (error, fallbackMessage = 'An error occurred') => {
+  console.error('API error:', error);
+  
+  // Handle network errors
+  if (error.name === 'TypeError' && error.message.includes('fetch')) {
+    throw new Error('Network error: Unable to connect to server. Please check your internet connection.');
+  }
+  
+  // Handle CORS errors
+  if (error.message.includes('CORS') || error.message.includes('cross-origin')) {
+    throw new Error('CORS error: Please check if the backend server is running and allows cross-origin requests.');
+  }
+  
+  throw error;
 };
 
 // Signup function
@@ -20,20 +37,27 @@ export const signup = async (userData) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
       },
       body: JSON.stringify(userData),
     });
 
-    const data = await response.json();
-
+    // Check if response is ok before trying to parse JSON
     if (!response.ok) {
-      throw new Error(data.message || 'Signup failed');
+      let errorMessage = 'Signup failed';
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.message || errorMessage;
+      } catch (parseError) {
+        errorMessage = `Server error: ${response.status} ${response.statusText}`;
+      }
+      throw new Error(errorMessage);
     }
 
+    const data = await response.json();
     return data;
   } catch (error) {
-    console.error('Signup API error:', error);
-    throw error;
+    handleApiError(error, 'Signup failed');
   }
 };
 
@@ -44,20 +68,27 @@ export const login = async (credentials) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
       },
       body: JSON.stringify(credentials),
     });
 
-    const data = await response.json();
-
+    // Check if response is ok before trying to parse JSON
     if (!response.ok) {
-      throw new Error(data.message || 'Login failed');
+      let errorMessage = 'Login failed';
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.message || errorMessage;
+      } catch (parseError) {
+        errorMessage = `Server error: ${response.status} ${response.statusText}`;
+      }
+      throw new Error(errorMessage);
     }
 
+    const data = await response.json();
     return data;
   } catch (error) {
-    console.error('Login API error:', error);
-    throw error;
+    handleApiError(error, 'Login failed');
   }
 };
 
