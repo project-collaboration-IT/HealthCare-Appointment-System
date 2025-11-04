@@ -14,7 +14,7 @@ Before you begin, ensure you have the following installed:
 If you haven't set up Git yet, [follow this guide](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git).
 
 ```bash
-git clone <your-repository-url>
+git clone <repository-url>
 cd <repository-folder>
 ```
 
